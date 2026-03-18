@@ -1,0 +1,158 @@
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { api } from '../utils/api';
+
+function StatTile({ label, value, color }) {
+  return (
+    <div className="stat-tile" style={{ '--tile-color': color }}>
+      <div className="stat-label">{label}</div>
+      <div className="stat-value">{value ?? '–'}</div>
+    </div>
+  );
+}
+
+import { getKritColor } from '../utils/helpers';
+
+// Status bar chart: use is_terminal for coloring (terminal = grey, else blue)
+function getStatusColor(entry, index) {
+  if (entry.is_terminal) return '#64748b';
+  const activeColors = ['#3b82f6', '#f59e0b', '#8b5cf6', '#10b981', '#06b6d4'];
+  return activeColors[index % activeColors.length];
+}
+
+export default function Dashboard() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    api.getDashboardStats()
+      .then(setData)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="loading"><div className="spinner" /> Lade Dashboard…</div>;
+  if (!data) return <div className="page"><div className="error-banner">Fehler beim Laden der Daten</div></div>;
+
+  const { stats, statusVerteilung, letzte_tickets, kritikalitaetVerteilung } = data;
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <div>
+          <div className="page-title">Dashboard</div>
+          <div className="page-subtitle">Übersicht aller Service-Aktivitäten</div>
+        </div>
+      </div>
+
+      <div className="stat-grid">
+        <StatTile label="Offene Tickets" value={stats.offen} color="#3b82f6" />
+        <StatTile label="In Bearbeitung" value={stats.in_bearbeitung} color="#f59e0b" />
+        <StatTile label="Warten auf Kunde" value={stats.warten} color="#8b5cf6" />
+        <StatTile label="Heute erstellt" value={stats.heute_erstellt} color="#10b981" />
+        <StatTile label="Heute geschlossen" value={stats.heute_geschlossen} color="#6b7280" />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 28 }}>
+        <div className="card">
+          <div className="card-title">Tickets nach Status</div>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={statusVerteilung} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
+              <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} />
+              <YAxis tick={{ fill: '#64748b', fontSize: 11 }} />
+              <Tooltip
+                contentStyle={{ background: '#1e2633', border: '1px solid #2d3748', borderRadius: 6, fontSize: 12 }}
+                cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+              />
+              <Bar dataKey="anzahl" radius={[4, 4, 0, 0]}>
+                {statusVerteilung.map((entry, i) => (
+                  <Cell key={i} fill={getStatusColor(entry, i)} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="card">
+          <div className="card-title">Offene Tickets nach Kritikalität</div>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={kritikalitaetVerteilung} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
+              <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} />
+              <YAxis tick={{ fill: '#64748b', fontSize: 11 }} />
+              <Tooltip
+                contentStyle={{ background: '#1e2633', border: '1px solid #2d3748', borderRadius: 6, fontSize: 12 }}
+                cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+              />
+              <Bar dataKey="anzahl" radius={[4, 4, 0, 0]}>
+                {kritikalitaetVerteilung.map((entry, i) => (
+                  <Cell key={i} fill={getKritColor(entry.gewichtung)} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-title">Letzte Tickets</div>
+        {letzte_tickets.length === 0 ? (
+          <div className="text-muted" style={{ padding: '20px 0', textAlign: 'center' }}>Keine Tickets vorhanden</div>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Ticket-Nr.</th>
+                <th>Betreff</th>
+                <th>Kunde</th>
+                <th>Kritikalität</th>
+                <th>Status</th>
+                <th>Erstellt</th>
+              </tr>
+            </thead>
+            <tbody>
+              {letzte_tickets.map(t => (
+                <tr key={t.ticketnr} onClick={() => navigate(`/tickets/${t.ticketnr}`)}>
+                  <td>
+                    <span className="mono" style={{ color: 'var(--accent)', fontSize: 12 }}>#{t.ticketnr}</span>
+                  </td>
+                  <td style={{ maxWidth: 240 }}>
+                    <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {t.betreff
+                        ? t.betreff.split('\n')[0]
+                        : <span className="text-muted">(kein Betreff)</span>
+                      }
+                    </span>
+                  </td>
+                  <td>{t.kunden_name || <span className="text-muted">–</span>}</td>
+                  <td>
+                    {t.kritikalitaet_name ? (
+                      <span className="badge" style={{
+                        background: getKritColor(t.kritikalitaet_gewichtung) + '22',
+                        color: getKritColor(t.kritikalitaet_gewichtung)
+                      }}>
+                        {t.kritikalitaet_name}
+                      </span>
+                    ) : <span className="text-muted">–</span>}
+                  </td>
+                  <td>
+                    <span className="badge" style={{
+                      background: t.is_terminal ? 'rgba(100,116,139,0.15)' : 'rgba(59,130,246,0.15)',
+                      color: t.is_terminal ? '#64748b' : 'var(--accent)'
+                    }}>
+                      {t.status_name}
+                    </span>
+                  </td>
+                  <td className="text-muted" style={{ fontSize: 12 }}>
+                    {new Date(t.erstellt_am).toLocaleDateString('de-DE')}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}

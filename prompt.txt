@@ -1,0 +1,842 @@
+================================================================================
+CLAUDE CODE - SERVICE TICKETING SYSTEM
+ERWEITERUNGSPROMPT v1.1
+GitHub · Inline-Entity-Creation · Dubletten-Matching · Advanced Filter & Sort
+================================================================================
+Voraussetzung: Master Build Prompt v1.0 + Stammdaten Prompt v1.0 abgeschlossen.
+Dieser Prompt baut auf der bestehenden Codebasis auf.
+================================================================================
+
+
+────────────────────────────────────────────────────────────────────────────────
+ABSCHNITT 1: GITHUB INTEGRATION
+────────────────────────────────────────────────────────────────────────────────
+
+AUFGABE 1.1 — .gitignore sicherstellen
+─────────────────────────────────────────
+Stelle sicher dass folgende Einträge in .gitignore vorhanden sind:
+
+  node_modules/
+  backend/.env
+  .env
+  dist/
+  *.log
+  .DS_Store
+  Thumbs.db
+  *.local
+
+
+AUFGABE 1.2 — Git Repository initialisieren
+─────────────────────────────────────────────
+Führe folgende Befehle aus (falls noch kein Git-Repo vorhanden):
+
+  git init
+  git add .
+  git commit -m "feat: initial project setup - Service Ticketing System v0.1.0"
+
+Falls bereits ein Repo vorhanden:
+  git status   (prüfen was offen ist)
+  git add .
+  git commit -m "feat: add GitHub Actions CI/CD setup"
+
+
+AUFGABE 1.3 — GitHub Actions Workflow erstellen
+─────────────────────────────────────────────────
+Erstelle Datei: .github/workflows/ci.yml
+
+Inhalt:
+───────────────────────────────────────────────────────────────
+name: CI/CD Service Ticketing
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install Backend Dependencies
+        run: cd backend && npm ci
+
+      - name: Install Frontend Dependencies
+        run: cd frontend && npm ci
+
+      - name: Build Frontend
+        run: cd frontend && npm run build
+
+      - name: Check Backend starts
+        run: |
+          cd backend
+          cp .env.example .env
+          timeout 10 node src/server.js || true
+
+  deploy-frontend:
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to Vercel
+        run: echo "Vercel auto-deploys via GitHub integration"
+        # Vercel verbindet sich direkt mit GitHub - kein separater Step nötig
+───────────────────────────────────────────────────────────────
+
+
+AUFGABE 1.4 — Auto-Push Script erstellen
+──────────────────────────────────────────
+Erstelle Datei: scripts/git-sync.sh
+
+  #!/bin/bash
+  # Schneller Sync: Stage → Commit → Push
+  # Verwendung: bash scripts/git-sync.sh "deine commit message"
+
+  MSG=${1:-"chore: auto-sync $(date '+%Y-%m-%d %H:%M')"}
+
+  echo "📦 Staging all changes..."
+  git add .
+
+  echo "💾 Committing: $MSG"
+  git commit -m "$MSG"
+
+  echo "🚀 Pushing to origin..."
+  git push origin HEAD
+
+  echo "✅ Done!"
+
+Erstelle Datei: scripts/git-sync.ps1  (Windows PowerShell Version)
+
+  param([string]$msg = "chore: auto-sync $(Get-Date -Format 'yyyy-MM-dd HH:mm')")
+
+  Write-Host "📦 Staging all changes..."
+  git add .
+
+  Write-Host "💾 Committing: $msg"
+  git commit -m $msg
+
+  Write-Host "🚀 Pushing to origin..."
+  git push origin HEAD
+
+  Write-Host "✅ Done!"
+
+
+AUFGABE 1.5 — Branch-Strategie dokumentieren
+──────────────────────────────────────────────
+Füge in CLAUDE.md folgende Sektion hinzu:
+
+  ## Git Workflow
+  - `main`    → Production (Vercel Auto-Deploy)
+  - `develop` → Aktive Entwicklung
+  - Feature-Branches: `feature/beschreibung`
+  - Hotfix-Branches:  `hotfix/beschreibung`
+
+  Commit-Konventionen (Conventional Commits):
+  - feat:     Neues Feature
+  - fix:      Bugfix
+  - chore:    Maintenance (deps, config)
+  - docs:     Dokumentation
+  - refactor: Code-Umstrukturierung
+  - style:    CSS/Formatierung
+
+DEVLOG + CHANGELOG nach Abschnitt 1 aktualisieren.
+
+
+────────────────────────────────────────────────────────────────────────────────
+ABSCHNITT 2: INLINE ENTITY CREATION (Quick-Create)
+────────────────────────────────────────────────────────────────────────────────
+
+ZIEL: Beim Erstellen/Bearbeiten eines Tickets oder Kunden soll der Nutzer
+      direkt aus dem gleichen Formular heraus fehlende Entitäten anlegen können,
+      ohne die aktuelle Seite zu verlassen.
+
+Betroffen:
+  Ticket-Form  → Kunde, Ansprechpartner, Maschine
+  Kunden-Form  → Ansprechpartner (im Kunden-Detail Tab)
+  Maschine-Form → Maschinentyp
+
+
+AUFGABE 2.1 — Universelle QuickCreate-Komponente
+──────────────────────────────────────────────────
+Erstelle: frontend/src/components/QuickCreate.jsx
+
+Konzept:
+  Ein Dropdown-Feld mit integriertem "+ Neu anlegen" Button.
+  Wenn geklickt, öffnet sich ein Mini-Modal (schmaler als das Haupt-Modal)
+  direkt über dem aktuellen Formular (z-index gestapelt).
+  Nach Speichern wird der neue Eintrag automatisch ausgewählt.
+
+Props:
+  - value: aktuell gewählter ID-Wert
+  - onChange: Callback mit neuem ID-Wert
+  - options: Array der vorhandenen Optionen [{id, label}]
+  - onCreateNew: async function(formData) → gibt neues Objekt zurück
+  - createForm: JSX der Felder für das Mini-Modal
+  - label: Bezeichnung des Feldes
+  - placeholder: Placeholder-Text
+  - disabled: boolean
+  - searchable: boolean (Suche in Dropdown aktivieren)
+
+Implementierung:
+───────────────────────────────────────────────────────────────
+export default function QuickCreate({
+  value, onChange, options, onCreateNew,
+  createForm, label, placeholder, disabled, searchable = true
+}) {
+  const [showCreate, setShowCreate] = useState(false);
+  const [search, setSearch] = useState('');
+  const [open, setOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  const filtered = searchable
+    ? options.filter(o => o.label.toLowerCase().includes(search.toLowerCase()))
+    : options;
+
+  const selectedLabel = options.find(o => o.id == value)?.label;
+
+  async function handleCreate(formData) {
+    setCreating(true);
+    try {
+      const newItem = await onCreateNew(formData);
+      onChange(newItem.id);
+      setShowCreate(false);
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <div className="quick-create-wrapper">
+      <label className="form-label">{label}</label>
+
+      {/* Haupt-Select mit Suche */}
+      <div className="quick-create-select" onClick={() => !disabled && setOpen(o => !o)}>
+        <span className={selectedLabel ? '' : 'placeholder'}>
+          {selectedLabel || placeholder || 'Auswählen...'}
+        </span>
+        <ChevronIcon />
+      </div>
+
+      {open && (
+        <div className="quick-create-dropdown">
+          {searchable && (
+            <input
+              className="quick-create-search"
+              placeholder="Suchen..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onClick={e => e.stopPropagation()}
+              autoFocus
+            />
+          )}
+          <div className="quick-create-options">
+            {filtered.map(o => (
+              <div
+                key={o.id}
+                className={`quick-create-option ${o.id == value ? 'selected' : ''}`}
+                onClick={() => { onChange(o.id); setOpen(false); setSearch(''); }}
+              >
+                {o.label}
+                {o.sublabel && <span className="sublabel">{o.sublabel}</span>}
+              </div>
+            ))}
+            {filtered.length === 0 && (
+              <div className="quick-create-empty">
+                Keine Treffer für "{search}"
+              </div>
+            )}
+          </div>
+          {/* "+ Neu anlegen" immer am Ende */}
+          <div className="quick-create-new-btn" onClick={() => { setOpen(false); setShowCreate(true); }}>
+            <PlusIcon /> Neu anlegen
+          </div>
+        </div>
+      )}
+
+      {/* Mini-Modal für neue Entität */}
+      {showCreate && (
+        <QuickCreateModal
+          title={`Neuen ${label} anlegen`}
+          onClose={() => setShowCreate(false)}
+          onSubmit={handleCreate}
+          creating={creating}
+        >
+          {createForm}
+        </QuickCreateModal>
+      )}
+    </div>
+  );
+}
+───────────────────────────────────────────────────────────────
+
+CSS in global.css hinzufügen:
+  .quick-create-wrapper     { position: relative; }
+  .quick-create-select      { /* wie form-select, cursor: pointer */ }
+  .quick-create-dropdown    { position: absolute; z-index: 200; top: 100%;
+                               left: 0; right: 0; background: var(--bg-elevated);
+                               border: 1px solid var(--border-focus);
+                               border-radius: var(--radius); max-height: 280px;
+                               overflow-y: auto; box-shadow: var(--shadow-lg); }
+  .quick-create-option      { padding: 8px 12px; cursor: pointer; font-size: 13px; }
+  .quick-create-option:hover{ background: var(--bg-hover); }
+  .quick-create-option.selected { color: var(--accent); }
+  .quick-create-new-btn     { padding: 10px 12px; border-top: 1px solid var(--border);
+                               color: var(--accent); cursor: pointer; font-size: 13px;
+                               display: flex; align-items: center; gap: 6px; }
+  .quick-create-empty       { padding: 12px; color: var(--text-muted); font-size: 12px; }
+  .sublabel                 { font-size: 11px; color: var(--text-muted); margin-left: 8px; }
+
+
+AUFGABE 2.2 — QuickCreate in Ticket-Form einbauen
+───────────────────────────────────────────────────
+In TicketList.jsx → CreateTicketModal:
+
+  FELD: ticket_kundennummer
+    → QuickCreate mit Kunden-Suche
+    → createForm: Name*, Matchcode, PLZ, Ort, Email, Telefon, Service-Priority
+    → onCreateNew: api.createKunde(data)
+
+  FELD: ticket_ansprechpartnerid
+    → QuickCreate (nur aktiv wenn Kunde gewählt)
+    → createForm: Name*, Abteilung*, Position*, Email, Telefon
+    → onCreateNew: api.createAnsprechpartner({...data, ansprechpartner_kundennr: selectedKundeId})
+    → options: nur Ansprechpartner des gewählten Kunden
+
+  FELD: ticket_maschinenid
+    → QuickCreate (nur aktiv wenn Kunde gewählt)
+    → createForm: Maschinennr.*, Maschinentyp*, Baujahr
+    → onCreateNew: api.createMaschine(data)
+    → sublabel: maschinentyp_name im Dropdown
+
+
+AUFGABE 2.3 — QuickCreate in Kunden-Detail einbauen
+─────────────────────────────────────────────────────
+In KundenDetail.jsx → Tab "Ansprechpartner":
+
+  Button "Ansprechpartner hinzufügen" öffnet Mini-Form inline:
+    Felder: Name*, Abteilung (QuickCreate→Abteilung), Position (QuickCreate→Position),
+            Email, Telefon, Vertretung (Dropdown: andere AP des Kunden)
+  Nach Speichern: Liste sofort aktualisieren.
+
+  Button "Maschine verknüpfen" öffnet Mini-Form inline:
+    Felder: Maschinennr.*, Maschinentyp (QuickCreate→Maschinentyp), Baujahr
+    Nach Speichern: Maschinen-Tab sofort aktualisieren.
+
+
+AUFGABE 2.4 — Maschinentyp Quick-Create
+─────────────────────────────────────────
+In Maschinen-Form → Feld maschinentyp_id:
+  → QuickCreate
+  → createForm: maschinentyp_name*, maschinentyp_beschreibung
+  → onCreateNew: api.post('/stammdaten/maschinentypen', data)
+
+DEVLOG + CHANGELOG nach Abschnitt 2 aktualisieren.
+
+
+────────────────────────────────────────────────────────────────────────────────
+ABSCHNITT 3: DUBLETTEN-MATCHING ALGORITHMUS
+────────────────────────────────────────────────────────────────────────────────
+
+ZIEL: Bevor ein neuer Datensatz gespeichert wird, prüft das System ob
+      möglicherweise bereits ein ähnlicher Eintrag existiert.
+      Der Nutzer wird gewarnt und kann entscheiden ob er trotzdem speichert.
+
+AUFGABE 3.1 — Backend: Matching-Endpunkte
+───────────────────────────────────────────
+Erstelle: backend/src/services/matchingService.js
+
+  Implementiere folgende Match-Funktionen:
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ matchKunde(data) → Sucht Dubletten für Kunden                           │
+  │                                                                         │
+  │ Scoring-Logik (je Treffer Punkte addieren):                             │
+  │  +90 Punkte: name_kunde exakter Match (case-insensitive)                │
+  │  +70 Punkte: name_kunde Levenshtein-Distanz ≤ 2                         │
+  │  +50 Punkte: name_kunde enthält gleiche Wörter (≥2 Wörter Überschneid.) │
+  │  +40 Punkte: gleiche PLZ + gleicher Ort                                 │
+  │  +30 Punkte: gleiche PLZ                                                │
+  │  +25 Punkte: gleicher matchcode (case-insensitive)                      │
+  │  +60 Punkte: gleiche Email-Adresse (in kunden_emails)                   │
+  │  +20 Punkte: gleiche Straße (normalisiert)                              │
+  │                                                                         │
+  │ Schwellenwerte:                                                         │
+  │  score ≥ 80 → WARNUNG "Mögliche Dublette"                              │
+  │  score ≥ 60 → HINWEIS "Ähnlicher Kunde gefunden"                       │
+  │  score < 60 → Kein Hinweis                                             │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ matchAnsprechpartner(data, kundennummer) → Dubletten für AP             │
+  │                                                                         │
+  │  +90 Punkte: Name exakter Match (selber Kunde)                         │
+  │  +70 Punkte: Name Levenshtein ≤ 2 (selber Kunde)                       │
+  │  +80 Punkte: gleiche Email (beliebiger Kunde)                           │
+  │  +60 Punkte: gleiche Email (selber Kunde)                               │
+  │  +30 Punkte: gleiche Telefonnummer                                      │
+  │                                                                         │
+  │ Schwellenwerte: wie oben                                                │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ matchMaschine(data) → Dubletten für Maschinen                           │
+  │                                                                         │
+  │  +100 Punkte: maschinennr exakter Match                                 │
+  │  +80 Punkte:  maschinennr Levenshtein ≤ 1 (Tippfehler)                 │
+  │  +50 Punkte:  maschinennr normalisiert gleich                           │
+  │               (Leerzeichen, Bindestriche ignorieren)                    │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  Hilfsfunktionen in matchingService.js:
+
+  function levenshtein(a, b) {
+    // Standard Levenshtein-Distanz Implementierung
+    // Keine externe Library - selbst implementieren (20 Zeilen)
+  }
+
+  function normalizeString(s) {
+    return s?.toLowerCase()
+             .trim()
+             .replace(/[\s\-_\.]+/g, ' ')
+             .normalize('NFD')
+             .replace(/[\u0300-\u036f]/g, ''); // Umlaute normalisieren
+  }
+
+  function wordOverlap(a, b) {
+    const wa = new Set(normalizeString(a).split(' ').filter(w => w.length > 2));
+    const wb = new Set(normalizeString(b).split(' ').filter(w => w.length > 2));
+    let count = 0;
+    for (const w of wa) if (wb.has(w)) count++;
+    return count;
+  }
+
+
+AUFGABE 3.2 — Backend: Match-API Endpunkte
+────────────────────────────────────────────
+In backend/src/routes/kunden.js hinzufügen:
+
+  POST /api/kunden/match
+  Body: { name_kunde, matchcode, plz, ort, straße, emails[] }
+  Response: {
+    matches: [
+      {
+        kundennummer, name_kunde, ort, plz, emails,
+        score: 85,
+        level: "warning",   // "warning" | "hint"
+        reasons: ["Gleicher Name", "Gleiche PLZ"]
+      }
+    ]
+  }
+
+In backend/src/routes/ansprechpartner.js:
+  POST /api/ansprechpartner/match
+  Body: { name, email, telefon, kundennummer }
+
+In backend/src/routes/maschinen.js:
+  POST /api/maschinen/match
+  Body: { maschinennr }
+
+
+AUFGABE 3.3 — Frontend: DuplicateWarning-Komponente
+─────────────────────────────────────────────────────
+Erstelle: frontend/src/components/DuplicateWarning.jsx
+
+  Zeigt eine auffällige Warnbox wenn Dubletten gefunden wurden.
+
+  Props:
+    matches: Array der gefundenen Treffer
+    level: "warning" | "hint"
+    entityType: "Kunde" | "Ansprechpartner" | "Maschine"
+    onSelectExisting: (id) → Callback wenn User existierenden Eintrag wählt
+    onContinue: () → Callback wenn User trotzdem neu anlegt
+
+  Design:
+    - level="warning" → orangefarbene Box mit ⚠ Icon
+    - level="hint"    → blaue Box mit ℹ Icon
+    - Jeder Match als klickbare Karte mit: Name, Ort, Score als Balken
+    - Button "Diesen verwenden" (öffnet existierenden Datensatz)
+    - Button "Trotzdem neu anlegen" (mit Checkbox "Ich bestätige, kein Duplikat")
+
+  Ablauf in Create-Forms:
+    1. User tippt Name/Email/Maschinennr. (debounced, 400ms nach letztem Tastendruck)
+    2. POST /api/.../match wird aufgerufen
+    3. Wenn matches.length > 0 → DuplicateWarning anzeigen
+    4. User entscheidet: existing wählen ODER weiter mit neu anlegen
+
+
+AUFGABE 3.4 — Matching in QuickCreate einbauen
+────────────────────────────────────────────────
+In QuickCreate.jsx → handleCreate():
+
+  // Vor dem API-Aufruf: Matching prüfen
+  async function handleCreate(formData) {
+    setCreating(true);
+    try {
+      const matchResult = await api.matchEntity(entityType, formData);
+      if (matchResult.matches.length > 0) {
+        setDuplicateWarning(matchResult);
+        setCreating(false);
+        return; // Warten auf User-Entscheidung
+      }
+      const newItem = await onCreateNew(formData);
+      onChange(newItem.id);
+      setShowCreate(false);
+    } finally {
+      setCreating(false);
+    }
+  }
+
+DEVLOG + CHANGELOG nach Abschnitt 3 aktualisieren.
+
+
+────────────────────────────────────────────────────────────────────────────────
+ABSCHNITT 4: SORTING & ADVANCED FILTER
+────────────────────────────────────────────────────────────────────────────────
+
+ZIEL: Alle Listen-Seiten erhalten einheitliche, erweiterbare Sort- und
+      Multi-Attribut-Filter-Funktionalität.
+
+AUFGABE 4.1 — Backend: Erweiterter Query-Builder
+──────────────────────────────────────────────────
+Erstelle: backend/src/utils/queryBuilder.js
+
+  Baut flexible PostgreSQL WHERE + ORDER BY Clauses aus URL-Parametern:
+
+  module.exports = function buildQuery(params, allowedFilters, allowedSorts) {
+    const where = [];
+    const values = [];
+    let i = 1;
+
+    for (const [key, config] of Object.entries(allowedFilters)) {
+      const val = params[key];
+      if (!val) continue;
+
+      switch (config.type) {
+        case 'exact':
+          where.push(`${config.col} = $${i++}`);
+          values.push(val);
+          break;
+        case 'ilike':
+          where.push(`${config.col} ILIKE $${i++}`);
+          values.push(`%${val}%`);
+          break;
+        case 'in':
+          // val = "1,2,3" → IN ($1,$2,$3)
+          const ids = val.split(',').map(v => v.trim()).filter(Boolean);
+          if (ids.length) {
+            where.push(`${config.col} = ANY($${i++}::int[])`);
+            values.push(ids);
+          }
+          break;
+        case 'boolean':
+          where.push(`${config.col} = $${i++}`);
+          values.push(val === 'true');
+          break;
+        case 'date_from':
+          where.push(`${config.col} >= $${i++}`);
+          values.push(val);
+          break;
+        case 'date_to':
+          where.push(`${config.col} <= $${i++}`);
+          values.push(val);
+          break;
+        case 'gte':
+          where.push(`${config.col} >= $${i++}`);
+          values.push(parseInt(val));
+          break;
+        case 'lte':
+          where.push(`${config.col} <= $${i++}`);
+          values.push(parseInt(val));
+          break;
+      }
+    }
+
+    // Sortierung
+    const sortField = params.sort_by;
+    const sortDir = params.sort_dir === 'desc' ? 'DESC' : 'ASC';
+    const orderBy = (sortField && allowedSorts[sortField])
+      ? `ORDER BY ${allowedSorts[sortField]} ${sortDir}`
+      : `ORDER BY ${allowedSorts['default']} DESC`;
+
+    // Pagination
+    const limit = Math.min(parseInt(params.limit) || 50, 200);
+    const offset = parseInt(params.offset) || 0;
+
+    return {
+      whereClause: where.length ? 'WHERE ' + where.join(' AND ') : '',
+      values,
+      orderBy,
+      pagination: `LIMIT $${i++} OFFSET $${i++}`,
+      paginationValues: [limit, offset],
+      nextIndex: i,
+    };
+  };
+
+
+AUFGABE 4.2 — Backend: Tickets Query erweitern
+────────────────────────────────────────────────
+In routes/tickets.js GET / den queryBuilder verwenden:
+
+  const TICKET_FILTERS = {
+    status_id:             { type: 'in',       col: 't.status_id' },
+    kategorie_id:          { type: 'in',       col: 't.kategorie_id' },
+    kritikalitaet_id:      { type: 'in',       col: 't.kritikalität_id' },
+    ticket_kundennummer:   { type: 'exact',    col: 't.ticket_kundennummer' },
+    erstellt_von:          { type: 'ilike',    col: 't.erstellt_von' },
+    search:                { type: 'ilike',    col: 'k.name_kunde' },
+    date_from:             { type: 'date_from',col: 't.created_at' },
+    date_to:               { type: 'date_to',  col: 't.created_at' },
+    is_terminal:           { type: 'boolean',  col: 's.is_terminal' },
+  };
+
+  const TICKET_SORTS = {
+    default:        't.created_at',
+    created_at:     't.created_at',
+    kritikalitaet:  'kr.kritikalität_gewichtung',
+    status:         's.status_name',
+    kunde:          'k.name_kunde',
+    ticketnr:       't.ticketnr',
+    geaendert_am:   't.geändert_am',
+  };
+
+  // Analog für kunden, maschinen, ersatzteile, ansprechpartner
+
+
+AUFGABE 4.3 — Frontend: useFilter Hook
+────────────────────────────────────────
+Erstelle: frontend/src/hooks/useFilter.js
+
+  // Zentraler Hook für Filter/Sort/Pagination State
+  export function useFilter(defaultSort = 'created_at', defaultDir = 'desc') {
+    const [filters, setFilters] = useState({});
+    const [sort, setSort] = useState({ by: defaultSort, dir: defaultDir });
+    const [page, setPage] = useState({ limit: 50, offset: 0 });
+
+    function setFilter(key, value) {
+      setFilters(f => ({ ...f, [key]: value || undefined }));
+      setPage(p => ({ ...p, offset: 0 })); // Reset auf Seite 1
+    }
+
+    function toggleSort(field) {
+      setSort(s => ({
+        by: field,
+        dir: s.by === field && s.dir === 'asc' ? 'desc' : 'asc',
+      }));
+    }
+
+    function clearFilters() {
+      setFilters({});
+      setPage({ limit: 50, offset: 0 });
+    }
+
+    const queryParams = {
+      ...filters,
+      sort_by: sort.by,
+      sort_dir: sort.dir,
+      limit: page.limit,
+      offset: page.offset,
+    };
+
+    return { filters, sort, page, setFilter, toggleSort, setPage, clearFilters, queryParams };
+  }
+
+
+AUFGABE 4.4 — Frontend: FilterBar Komponente
+──────────────────────────────────────────────
+Erstelle: frontend/src/components/FilterBar.jsx
+
+  Props:
+    filterConfig: Array von Filter-Definitionen
+    filters: aktueller Filter-State (aus useFilter)
+    onFilterChange: setFilter Funktion
+    onClear: clearFilters Funktion
+    activeCount: Anzahl aktiver Filter
+
+  Filter-Typen die FilterBar unterstützt:
+    { type: 'search',    key: 'search',      label: 'Suche',      placeholder: '...' }
+    { type: 'select',    key: 'status_id',   label: 'Status',     options: [...] }
+    { type: 'multiselect',key: 'kategorie_id',label: 'Kategorie', options: [...] }
+    { type: 'daterange', key: 'date',        label: 'Zeitraum' }
+    { type: 'boolean',   key: 'is_terminal', label: 'Nur offene' }
+
+  Design:
+    - Filterzeile horizontal (scroll bei Overflow)
+    - Aktive Filter als "Chips" mit X-Button darunter
+    - "Filter löschen" Button rechts (nur wenn Filter aktiv)
+    - Badge mit Anzahl aktiver Filter auf dem "Filter" Button
+    - Erweiterter Modus: Klappbarer "Mehr Filter" Bereich
+      für seltener genutzte Filter (Datumsbereich etc.)
+
+  Implementierung der Multi-Select Chips:
+    - Klick auf Option → toggled (nicht schließt Dropdown)
+    - Gewählte Optionen als blaue Chips angezeigt
+    - "Alle" Option zum Reset des einzelnen Filters
+
+
+AUFGABE 4.5 — Frontend: SortableHeader Komponente
+───────────────────────────────────────────────────
+Erstelle: frontend/src/components/SortableHeader.jsx
+
+  Props:
+    field: string (Sort-Key)
+    label: string
+    sort: { by, dir } aus useFilter
+    onSort: toggleSort Funktion
+
+  Zeigt: Spaltenname + Sort-Indikator (▲/▼/⇅)
+  Aktive Spalte: farbig hervorgehoben (var(--accent))
+
+  Verwendung in Tabellen:
+    <th>
+      <SortableHeader field="kritikalitaet" label="Kritikalität"
+                      sort={sort} onSort={toggleSort} />
+    </th>
+
+
+AUFGABE 4.6 — Tickets-Liste komplett überarbeiten
+───────────────────────────────────────────────────
+TicketList.jsx mit useFilter + FilterBar + SortableHeader:
+
+  Filter-Konfiguration für Tickets:
+    - Suche (name_kunde, ticketnr)
+    - Status (Multi-Select, Chips)
+    - Kategorie (Multi-Select, nach Typ gruppiert: Ersatzteil / Tech. Problem)
+    - Kritikalität (Multi-Select: Low/Medium/High mit Farben)
+    - Erstellt von (Text-Suche)
+    - Zeitraum (Datumsbereich created_at)
+    - Toggle: "Nur offene Tickets"
+
+  Sortierbare Spalten: #, Kunde, Kritikalität, Status, Erstellt am, Geändert am
+
+  Pagination:
+    Zeige: "Seite X von Y · Gesamt: Z Tickets"
+    Buttons: Erste | ← Zurück | Weiter → | Letzte
+    Dropdown: 25 / 50 / 100 pro Seite
+
+
+AUFGABE 4.7 — Kunden-Liste Filter & Sort
+──────────────────────────────────────────
+KundenList.jsx:
+
+  Filter:
+    - Suche (name, matchcode, ort, plz)
+    - Service Priority (Multi-Select)
+    - Hat offene Tickets (Toggle)
+    - Land (Select, aus vorhandenen Werten dynamisch)
+
+  Sortierbare Spalten: Kundennr., Name, Ort, PLZ, Priority, Ticket-Anzahl
+
+
+AUFGABE 4.8 — Ersatzteile-Liste Filter & Sort
+───────────────────────────────────────────────
+ErsatzteileList.jsx:
+
+  Filter:
+    - Suche (bezeichnung, artikelnr)
+    - Maschinentyp-Kompatibilität (Multi-Select)
+    - Nur Baugruppen (Toggle: baugruppe_artikelnr IS NULL)
+    - Baujahr von/bis
+
+  Sortierbare Spalten: Artikelnr., Bezeichnung, Baugruppe
+
+
+AUFGABE 4.9 — Maschinen-Liste Filter & Sort
+─────────────────────────────────────────────
+MaschinenList.jsx:
+
+  Filter:
+    - Suche (maschinennr)
+    - Maschinentyp (Multi-Select)
+    - Baujahr von/bis (zwei Zahlfelder)
+
+  Sortierbare Spalten: Maschinennr., Maschinentyp, Baujahr
+
+DEVLOG + CHANGELOG nach Abschnitt 4 aktualisieren.
+
+
+────────────────────────────────────────────────────────────────────────────────
+ABSCHNITT 5: DOKUMENTATION & TRACKING
+────────────────────────────────────────────────────────────────────────────────
+
+Nach Abschluss aller Abschnitte folgende Dateien aktualisieren:
+
+DEVLOG.md:
+  - Session-Eintrag mit allen abgearbeiteten Tasks
+  - Offene Punkte dokumentieren
+
+CHANGELOG.md:
+  ## [0.2.0] - DATUM
+  ### Added
+  - GitHub Actions CI/CD Workflow (.github/workflows/ci.yml)
+  - Git-Sync Scripts (bash + PowerShell)
+  - QuickCreate Komponente für Inline-Entitätserstellung
+  - Inline-Create für Kunden, Ansprechpartner, Maschinen in Ticket-Form
+  - Dubletten-Matching Backend (Levenshtein + Scoring)
+  - DuplicateWarning Frontend-Komponente
+  - useFilter Hook für einheitliches Filter/Sort/Pagination
+  - FilterBar Komponente mit Multi-Select und Chips
+  - SortableHeader Komponente für alle Tabellen
+  - Erweiterte Filter für Tickets, Kunden, Maschinen, Ersatzteile
+  - Pagination in allen Listen-Ansichten
+  ### Changed
+  - Ticket-Form: Felder jetzt mit QuickCreate + Dubletten-Check
+  - Alle Listen: Sort + Multi-Filter + Pagination
+
+CLAUDE.md:
+  Neue Sektion "Komponenten-Bibliothek" hinzufügen:
+    - QuickCreate: Props, Verwendung, Beispiel
+    - FilterBar: filterConfig Format, Typen
+    - DuplicateWarning: Matching-Logik, Schwellenwerte
+    - SortableHeader: Verwendung mit useFilter
+
+docs/DB_COVERAGE.md:
+  Alle Tabellen die durch diesen Prompt Erweiterungen bekommen auf ✅ updaten.
+
+
+────────────────────────────────────────────────────────────────────────────────
+AUSFÜHRUNGSREIHENFOLGE
+────────────────────────────────────────────────────────────────────────────────
+
+  Schritt 1: Abschnitt 1 komplett (GitHub)
+             → Commit: "chore: add GitHub Actions and git-sync scripts"
+
+  Schritt 2: Abschnitt 2 komplett (QuickCreate)
+             → Commit: "feat: add inline entity creation with QuickCreate"
+
+  Schritt 3: Abschnitt 3 komplett (Matching)
+             → Commit: "feat: add duplicate detection matching algorithm"
+
+  Schritt 4: Abschnitt 4 komplett (Filter/Sort)
+             → Commit: "feat: add advanced filtering, sorting and pagination"
+
+  Schritt 5: Abschnitt 5 (Doku)
+             → Commit: "docs: update CHANGELOG, DEVLOG, CLAUDE.md for v0.2.0"
+
+  Frage nach Bestätigung nur zwischen den Schritten WENN ein Schritt
+  länger als 30 Minuten dauert oder ein unerwartetes Problem auftritt.
+  Sonst: Alle Schritte nacheinander ohne Unterbrechung durchführen.
+
+================================================================================
+PROMPT STACK - REIHENFOLGE ALLER PROMPTS
+================================================================================
+
+  1. CLAUDE_CODE_MASTER_PROMPT.txt        (Projektstruktur + alle DB-Tabellen)
+  2. CLAUDE_CODE_STAMMDATEN_PROMPT.txt    (Abteilungen, Kategorien, Kritikalität)
+  3. CLAUDE_CODE_ERWEITERUNG_v1.1.txt     ← DIESER PROMPT
+                                            (GitHub, QuickCreate, Matching, Filter)
+
+================================================================================
+END OF PROMPT
+================================================================================

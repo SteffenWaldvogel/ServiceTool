@@ -1,0 +1,11 @@
+{
+  "name": "service-tool",
+  "version": "1.0.0",
+  "description": "Service Ticketing System",
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "install:all": "cd backend && npm install && cd ../frontend && npm install",
+    "setup": "npm run install:all"
+  }
+}
