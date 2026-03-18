@@ -1,13 +1,14 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../utils/api';
+import QuickCreate from '../components/QuickCreate';
 
-function MaschineModal({ item, maschinentypen, onClose, onSaved }) {
+function MaschineModal({ item, maschinentypen, onClose, onSaved, onMaschinentypenUpdate }) {
   const isEdit = !!item;
   const [form, setForm] = useState(item ? {
     maschinennr: item.maschinennr || '',
     bezeichnung: item.bezeichnung || '',
-    maschinentyp_id: item.maschinentyp_id || '',
+    maschinentyp_id: item.maschinentyp_id ? String(item.maschinentyp_id) : '',
     baujahr: item.baujahr || ''
   } : {
     maschinennr: '',
@@ -72,12 +73,24 @@ function MaschineModal({ item, maschinentypen, onClose, onSaved }) {
           </div>
           <div className="form-group">
             <label className="form-label">Maschinentyp *</label>
-            <select className="form-control" value={form.maschinentyp_id} onChange={set('maschinentyp_id')}>
-              <option value="">— Typ wählen —</option>
-              {maschinentypen.map(m => (
-                <option key={m.id} value={m.id}>{m.name}</option>
-              ))}
-            </select>
+            <QuickCreate
+              label="Maschinentyp"
+              value={form.maschinentyp_id}
+              onChange={v => setForm(f => ({ ...f, maschinentyp_id: v }))}
+              options={maschinentypen.map(m => ({ id: m.id, label: m.name }))}
+              onCreateNew={async (data) => {
+                const created = await api.createMaschinentyp({
+                  maschinentyp_name: data.name,
+                  maschinentyp_beschreibung: data.beschreibung || null
+                });
+                if (onMaschinentypenUpdate) onMaschinentypenUpdate(created);
+                return { id: created.maschinentyp_id || created.id };
+              }}
+              createFields={[
+                { key: 'name', label: 'Name', required: true },
+                { key: 'beschreibung', label: 'Beschreibung', type: 'textarea' },
+              ]}
+            />
           </div>
           <div className="form-group">
             <label className="form-label">Baujahr</label>
@@ -232,6 +245,10 @@ export default function MaschinenList() {
           maschinentypen={maschinentypen}
           onClose={() => setModal(null)}
           onSaved={() => { setModal(null); load(); }}
+          onMaschinentypenUpdate={(created) => {
+            const newTyp = { id: created.maschinentyp_id || created.id, name: created.maschinentyp_name || created.name };
+            setMaschinentypen(prev => [...prev, newTyp]);
+          }}
         />
       )}
     </div>

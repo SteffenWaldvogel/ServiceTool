@@ -2,6 +2,29 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/database');
 const { sendConfirmationEmail } = require('../services/emailService');
+const buildQuery = require('../utils/queryBuilder');
+
+const TICKET_FILTERS = {
+  status_id:           { type: 'in',        col: 't.status_id' },
+  kategorie_id:        { type: 'in',        col: 't.kategorie_id' },
+  kritikalitaet_id:    { type: 'in',        col: "t.\"kritikalität_id\"" },
+  ticket_kundennummer: { type: 'exact',     col: 't.ticket_kundennummer' },
+  kunden_id:           { type: 'exact',     col: 't.ticket_kundennummer' },
+  erstellt_von:        { type: 'ilike',     col: 't.erstellt_von' },
+  date_from:           { type: 'date_from', col: 't.erstellt_am' },
+  date_to:             { type: 'date_to',   col: 't.erstellt_am' },
+  is_terminal:         { type: 'boolean',   col: 's.is_terminal' },
+};
+
+const TICKET_SORTS = {
+  default:       't.erstellt_am',
+  created_at:    't.erstellt_am',
+  kritikalitaet: "kr.\"kritikalität_gewichtung\"",
+  status:        's.status_name',
+  kunde:         'k.name_kunde',
+  ticketnr:      't.ticketnr',
+  geaendert_am:  "t.\"geändert_am\"",
+};
 
 // Shared SELECT base - first message as betreff via subquery
 const TICKET_SELECT = `
@@ -49,53 +72,33 @@ const TICKET_SELECT = `
 // GET /api/tickets
 router.get('/', async (req, res) => {
   try {
-    const {
-      status_id, kritikalitaet_id, kategorie_id, kunden_id,
-      search, limit = 100, offset = 0
-    } = req.query;
+    const { conditions, params, orderBy, limit, offset } = buildQuery(req.query, TICKET_FILTERS, TICKET_SORTS);
 
-    const conditions = [];
-    const params = [];
-
-    if (status_id) {
-      params.push(status_id);
-      conditions.push(`t.status_id = $${params.length}`);
-    }
-    if (kritikalitaet_id) {
-      params.push(kritikalitaet_id);
-      conditions.push(`t.kritikalität_id = $${params.length}`);
-    }
-    if (kategorie_id) {
-      params.push(kategorie_id);
-      conditions.push(`t.kategorie_id = $${params.length}`);
-    }
-    if (kunden_id) {
-      params.push(kunden_id);
-      conditions.push(`t.ticket_kundennummer = $${params.length}`);
-    }
-    if (search) {
-      params.push(`%${search}%`);
+    // Handle search specially: ILIKE on name_kunde OR ticketnr
+    if (req.query.search) {
+      params.push(`%${req.query.search}%`);
       const p = params.length;
-      conditions.push(
-        `(k.name_kunde ILIKE $${p} OR t.ticketnr::text ILIKE $${p} OR EXISTS (
-          SELECT 1 FROM ticket_messages tm2
-          WHERE tm2.ticketnr = t.ticketnr
-          ORDER BY tm2.created_at ASC
-          LIMIT 1
-        ) AND (
-          SELECT tm3.message FROM ticket_messages tm3
-          WHERE tm3.ticketnr = t.ticketnr
-          ORDER BY tm3.created_at ASC LIMIT 1
-        ) ILIKE $${p})`
-      );
+      conditions.push(`(k.name_kunde ILIKE $${p} OR t.ticketnr::text ILIKE $${p})`);
     }
 
     const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
-    params.push(limit, offset);
-    const query = `${TICKET_SELECT} ${where} ORDER BY t.erstellt_am DESC LIMIT $${params.length - 1} OFFSET $${params.length}`;
 
-    const result = await pool.query(query, params);
-    res.json(result.rows);
+    // Count query (same WHERE, no ORDER/LIMIT)
+    const countResult = await pool.query(
+      `SELECT COUNT(*)::int AS total
+       FROM ticket t
+       LEFT JOIN status s ON t.status_id = s.status_id
+       LEFT JOIN kunden k ON t.ticket_kundennummer = k.kundennummer
+       LEFT JOIN kritikalität kr ON t.kritikalität_id = kr.kritikalität_id
+       ${where}`,
+      params
+    );
+
+    const dataParams = [...params, limit, offset];
+    const query = `${TICKET_SELECT} ${where} ORDER BY ${orderBy} LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}`;
+    const result = await pool.query(query, dataParams);
+
+    res.json({ data: result.rows, total: countResult.rows[0].total });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

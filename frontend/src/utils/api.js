@@ -149,6 +149,11 @@ export const api = {
   updateCustomFieldOption: (table, key, value, data) => request(`/custom-fields/options/${table}/${key}/${value}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCustomFieldOption: (table, key, value) => request(`/custom-fields/options/${table}/${key}/${value}`, { method: 'DELETE' }),
 
+  // ── Dubletten-Matching ────────────────────────────────────────────────────
+  matchKunden: (data) => request('/kunden/match', { method: 'POST', body: JSON.stringify(data) }),
+  matchAnsprechpartner: (data) => request('/ansprechpartner/match', { method: 'POST', body: JSON.stringify(data) }),
+  matchMaschinen: (data) => request('/maschinen/match', { method: 'POST', body: JSON.stringify(data) }),
+
   // ── Ersatzteile ──────────────────────────────────────────────────────────
   getErsatzteile: (params = {}) => {
     const q = new URLSearchParams(params).toString();

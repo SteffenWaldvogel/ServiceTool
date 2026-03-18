@@ -9,6 +9,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [UNRELEASED]
 
 ### Added
+- GitHub Actions CI/CD workflow (`.github/workflows/ci.yml`) – lint, build, smoke-test on push to main/develop
+- Git-Sync Scripts (`scripts/git-sync.sh` + `scripts/git-sync.ps1`) – one-command add/commit/push
+- `QuickCreate` component (`frontend/src/components/QuickCreate.jsx`) – searchable dropdown with inline "Neu anlegen" mini-modal; after creation the new item is auto-selected
+- `DuplicateWarning` component (`frontend/src/components/DuplicateWarning.jsx`) – score bar, reason badges, confirm-checkbox before allowing duplicate creation
+- Duplicate detection: `backend/src/services/matchingService.js` with Levenshtein distance scoring for Kunden, Ansprechpartner and Maschinen
+- Match API endpoints: `POST /api/kunden/match`, `POST /api/ansprechpartner/match`, `POST /api/maschinen/match`
+- `useFilter` hook (`frontend/src/hooks/useFilter.js`) – unified filter/sort/pagination state management
+- `FilterBar` component (`frontend/src/components/FilterBar.jsx`) – primary + advanced filter rows, active-filter chips, clear button
+- `SortableHeader` component (`frontend/src/components/SortableHeader.jsx`) – sortable table column headers with direction indicator
+- Advanced filter + sort + pagination for TicketList (sort by Ticket-Nr., Kunde, Kritikalität, Status, Erstellt; page sizes 25/50/100)
+- `queryBuilder` utility (`backend/src/utils/queryBuilder.js`) – flexible PostgreSQL WHERE/ORDER BY builder supporting in, exact, ilike, date_from, date_to, boolean filter types
 - `backend/src/config/seed.sql` – Stammdaten-Seed-Datei (idempotent ausführbar)
 - `frontend/src/utils/helpers.js` – Zentrale Hilfsfunktionen: `getKritColor()`, `parseKategorie()`
 - PostgreSQL Audit-Log-Trigger für 7 Tabellen: `ticket`, `kunden`, `ansprechpartner`, `maschine`, `ersatzteile`, `status`, `kategorie` — jede Änderung wird automatisch in `audit_log` gespeichert

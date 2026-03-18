@@ -388,4 +388,15 @@ router.delete('/:id/ansprechpartner/:apId', async (req, res) => {
   }
 });
 
+// POST /api/kunden/match
+router.post('/match', async (req, res) => {
+  try {
+    const { matchKunde } = require('../services/matchingService');
+    const matches = await matchKunde(pool, req.body);
+    res.json({ matches });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

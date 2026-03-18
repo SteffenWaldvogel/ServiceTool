@@ -196,4 +196,15 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// POST /api/ansprechpartner/match
+router.post('/match', async (req, res) => {
+  try {
+    const { matchAnsprechpartner } = require('../services/matchingService');
+    const matches = await matchAnsprechpartner(pool, req.body, req.body.kundennummer);
+    res.json({ matches });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

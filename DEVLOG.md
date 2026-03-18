@@ -4,6 +4,91 @@ Chronological log of development sessions for the Service Tool project.
 
 ---
 
+## Session 3 – 2026-03-18
+
+**Objective:** Implement GitHub integration, QuickCreate inline entity creation, duplicate detection, advanced filtering/sorting with pagination, and supporting infrastructure.
+
+### Scope
+Session 3 extends the application with developer tooling (Git/CI) and major UX improvements: users can now create Kunden, Ansprechpartner, and Maschinen inline from dropdowns without leaving the Ticket create modal; a Levenshtein-based matching service warns about potential duplicates; and the TicketList gains server-side sort, advanced filters, and pagination.
+
+### Backend work
+
+1. **`services/matchingService.js`** (new)
+   - Implements `matchKunde`, `matchAnsprechpartner`, `matchMaschine`
+   - Levenshtein distance + word-overlap + field-by-field scoring
+   - Returns top 5 matches with score (0–100), level (`warning`/`hint`), and reason tags
+   - Scores ≥ 80 flagged as `warning` (strong duplicate), ≥ 60 as `hint`
+
+2. **Match endpoints** (added to existing routes)
+   - `POST /api/kunden/match` → matchKunde
+   - `POST /api/ansprechpartner/match` → matchAnsprechpartner
+   - `POST /api/maschinen/match` → matchMaschine
+
+3. **`utils/queryBuilder.js`** (new)
+   - Generic filter builder supporting: `in`, `exact`, `ilike`, `date_from`, `date_to`, `boolean` types
+   - Handles sort aliasing and pagination with max-limit cap (1000)
+
+4. **`routes/tickets.js`** GET / (updated)
+   - Replaced manual filter/pagination with `buildQuery` utility
+   - Search on `name_kunde` OR `ticketnr::text`
+   - Response changed from array to `{ data: [...], total: N }` for pagination support
+   - Separate COUNT query for total (same WHERE, no ORDER/LIMIT)
+
+### Frontend work
+
+5. **`components/DuplicateWarning.jsx`** (new)
+   - Score progress bar, reason badges, warning/hint color scheme
+   - Confirmation checkbox required before "Trotzdem neu anlegen"
+   - `onSelectExisting` callback to use an existing record instead
+
+6. **`components/QuickCreate.jsx`** (new)
+   - Searchable dropdown trigger with live search input
+   - "Neu anlegen" opens a mini-modal with configurable field schema
+   - Accepts `matchFn` prop: calls match endpoint before create; shows DuplicateWarning if matches found
+   - After confirmed creation, new item is auto-selected in the dropdown
+
+7. **`components/FilterBar.jsx`** (new)
+   - Primary filters always visible; advanced filters collapsed under "Mehr Filter" toggle
+   - Active filter chips below bar with individual ✕ remove and bulk "Filter löschen"
+   - Supports: search, select, boolean checkbox, daterange (two date inputs)
+
+8. **`components/SortableHeader.jsx`** (new)
+   - Inline sort indicator: ⇅ (inactive), ▲/▼ (active asc/desc)
+   - Accent color on active column
+
+9. **`hooks/useFilter.js`** (new)
+   - Encapsulates filters, sort, page state with `setFilter`, `setSort`, `setPage`, `clearFilters`, `buildParams`
+   - `setFilter` and `setSort` automatically reset page offset to 0
+
+10. **`pages/TicketList.jsx`** (updated)
+    - CreateTicketModal: replaced `<select>` for Kunde, Ansprechpartner, Maschine with QuickCreate components
+    - Main list: added FilterBar, SortableHeader on all key columns, pagination controls
+    - Handles both array and `{ data, total }` response formats for backward compatibility
+    - Lookup now loads abteilungen, positionen, maschinentypen for QuickCreate createFields
+
+11. **`pages/MaschinenList.jsx`** (updated)
+    - MaschineModal: replaced maschinentyp `<select>` with QuickCreate
+    - New maschinentyp created inline is appended to the maschinentypen list in the parent
+
+12. **`utils/api.js`** (updated)
+    - Added `matchKunden`, `matchAnsprechpartner`, `matchMaschinen` methods
+
+### Infrastructure
+
+13. **`.gitignore`** (updated) – added `backend/.env`, `*.local`
+14. **`.github/workflows/ci.yml`** (new) – GitHub Actions CI/CD
+15. **`scripts/git-sync.sh`** + **`scripts/git-sync.ps1`** (new) – quick sync scripts
+16. **`CLAUDE.md`** (updated) – added Git Workflow section with branch strategy and conventional commits
+
+### Key decisions & notes
+
+- **`{ data, total }` response shape**: Only the `GET /api/tickets` route changed. All other list routes remain array-returning for compatibility. The frontend handles both shapes.
+- **QuickCreate `matchFn`**: Duplicate check happens before creation. The user must tick a confirmation checkbox to bypass. This avoids mandatory DB roundtrips when not needed (matchFn is optional).
+- **queryBuilder**: The `is_terminal` boolean filter joins `status s` which is already present in TICKET_SELECT, so no extra join needed. The count query includes the same JOINs as the data query to ensure WHERE clauses referencing joined tables work correctly.
+- **Levenshtein threshold**: Score ≥ 60 to surface matches, ≥ 80 for warning level. Exact email match gets +60 (same kunde) / +80 (different kunde) to catch cross-customer email reuse.
+
+---
+
 ## Session 2 – 2026-03-18
 
 **Objective:** Implement all missing features based on master build prompt review.

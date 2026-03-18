@@ -178,4 +178,15 @@ router.get('/:id/tickets', async (req, res) => {
   }
 });
 
+// POST /api/maschinen/match
+router.post('/match', async (req, res) => {
+  try {
+    const { matchMaschine } = require('../services/matchingService');
+    const matches = await matchMaschine(pool, req.body);
+    res.json({ matches });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
