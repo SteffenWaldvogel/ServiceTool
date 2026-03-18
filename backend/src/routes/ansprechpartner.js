@@ -1,26 +1,48 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/database');
+const buildQuery = require('../utils/queryBuilder');
 
-// GET /api/ansprechpartner?kunden_id=X
+const AP_FILTERS = {
+  email:        { type: 'ilike', col: 'ap.ansprechpartner_email' },
+  kunden_id:    { type: 'exact', col: 'ap.ansprechpartner_kundennr' },
+  abteilung_id: { type: 'exact', col: 'ap.abteilung_id' },
+  position_id:  { type: 'exact', col: 'ap.position_id' },
+};
+
+const AP_SORTS = {
+  default:   'ap.ansprechpartner_name',
+  name:      'ap.ansprechpartner_name',
+  kunde:     'k.name_kunde',
+  abteilung: 'ab.abteilung_name',
+  position:  'pos.position_name',
+};
+
+// GET /api/ansprechpartner
 router.get('/', async (req, res) => {
   try {
-    const { kunden_id, search } = req.query;
-    const params = [];
-    const conditions = [];
+    const { conditions, params, orderBy, limit, offset } = buildQuery(req.query, AP_FILTERS, AP_SORTS, { defaultDir: 'asc' });
 
-    if (kunden_id) {
-      params.push(kunden_id);
-      conditions.push(`ap.ansprechpartner_kundennr = $${params.length}`);
-    }
-
-    if (search) {
-      params.push(`%${search}%`);
-      conditions.push(`(ap.ansprechpartner_name ILIKE $${params.length} OR ap.ansprechpartner_email ILIKE $${params.length})`);
+    // search on name OR email
+    if (req.query.search) {
+      params.push(`%${req.query.search}%`);
+      const p = params.length;
+      conditions.push(`(ap.ansprechpartner_name ILIKE $${p} OR ap.ansprechpartner_email ILIKE $${p})`);
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
+    const countResult = await pool.query(
+      `SELECT COUNT(*)::int AS total
+       FROM ansprechpartner ap
+       LEFT JOIN abteilung ab ON ap.abteilung_id = ab.abteilung_id
+       LEFT JOIN position pos ON ap.position_id = pos.position_id
+       LEFT JOIN kunden k ON ap.ansprechpartner_kundennr = k.kundennummer
+       ${where}`,
+      params
+    );
+
+    const dataParams = [...params, limit, offset];
     const result = await pool.query(
       `SELECT
          ap.ansprechpartnerid,
@@ -42,10 +64,11 @@ router.get('/', async (req, res) => {
        LEFT JOIN position pos ON ap.position_id = pos.position_id
        LEFT JOIN kunden k ON ap.ansprechpartner_kundennr = k.kundennummer
        ${where}
-       ORDER BY ap.ansprechpartner_name`,
-      params
+       ORDER BY ${orderBy}
+       LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}`,
+      dataParams
     );
-    res.json(result.rows);
+    res.json({ data: result.rows, total: countResult.rows[0].total });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

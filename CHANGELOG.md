@@ -8,6 +8,35 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [UNRELEASED]
 
+### Added (Session 4)
+- **KundenDetail**: Inline-Form für Ansprechpartner – ausklappbares Form mit QuickCreate für Abteilung/Position und DuplicateWarning-Integration
+- **KundenDetail**: Inline-Form für Maschinen – Anlegen direkt in KundenDetail mit QuickCreate Maschinentyp, Dubletten-Check, "Sofort Ticket erstellen" Checkbox
+- **KundenDetail**: Maschinen-Tabelle navigiert zu `/maschinen/:id` (Pfeil-Link + klickbare Zeile)
+- **MaschinenDetail**: Tabs "Stammdaten" und "Ticket-Historie" – vollständige Tabelle mit Kategorie-Badge, Kritikalität, Status, Datum
+- **Filter/Sort/Pagination für KundenList**: FilterBar (Suche, PLZ, Service-Priority), SortableHeader, Paginierung 25/50/100
+- **Filter/Sort/Pagination für AnsprechpartnerList**: FilterBar (Name, E-Mail, Abteilung), SortableHeader, Paginierung
+- **Filter/Sort/Pagination für MaschinenList**: FilterBar (Maschinennr., Typ, Baujahr von/bis), SortableHeader, Paginierung
+- **Filter/Sort/Pagination für ErsatzteileList**: FilterBar (Bezeichnung, Artikelnr., Typ-Filter), SortableHeader, Paginierung
+- **FilterBar**: type `number` ergänzt (numerische Filter-Inputs)
+- **queryBuilder**: `gte`, `lte`, `boolean_null` Filter-Typen ergänzt
+- **Backend kunden.js GET /**: queryBuilder, JOINs für service_priority + ticket_count Subquery, Response `{ data, total }`
+- **Backend ansprechpartner.js GET /**: queryBuilder, Response `{ data, total }`
+- **Backend maschinen.js GET /**: queryBuilder mit Baujahr-Bereichsfilter, Response `{ data, total }`
+- **Backend ersatzteile.js GET /**: queryBuilder mit boolean_null für Baugruppen-Filter, Response `{ data, total }`
+- **Backend ersatzteile.js**: GET-Endpoints für kompatibilitaet-baujahr und kompatibilitaet-nummer (mit maschinentyp_name JOIN)
+- **Backend tickets.js**: Filter `ticket_maschinenid` ergänzt
+- **Backend maschinen.js GET /:id/tickets**: kategorie_name über JOIN ergänzt
+- **seed.sql**: Spezialpositionen für Service/Vertrieb/QS/Buchhaltung/Logistik ergänzt
+- **CLAUDE.md**: Project Structure und API Endpoints vollständig aktualisiert
+
+### Changed (Session 4)
+- KundenList: von einfacher Suche zu vollständigem Filter/Sort/Pagination umgestellt
+- AnsprechpartnerList: von einfacher Suche zu Filter/Sort/Pagination umgestellt
+- MaschinenList: von einfachen Filtern zu FilterBar + SortableHeader + Pagination umgestellt
+- ErsatzteileList: von einfachen Filtern zu FilterBar + SortableHeader + Pagination umgestellt
+- MaschinenDetail: Ticket-Sidebar zu Tab "Ticket-Historie" mit vollständiger Tabelle erweitert
+- Alle List-APIs geben jetzt `{ data, total }` zurück (Frontend behandelt beide Formate rückwärtskompatibel)
+
 ### Added
 - GitHub Actions CI/CD workflow (`.github/workflows/ci.yml`) – lint, build, smoke-test on push to main/develop
 - Git-Sync Scripts (`scripts/git-sync.sh` + `scripts/git-sync.ps1`) – one-command add/commit/push

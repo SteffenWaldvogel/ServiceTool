@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/database');
+const buildQuery = require('../utils/queryBuilder');
 
 const MASCHINE_SELECT = `
   SELECT
@@ -10,25 +11,46 @@ const MASCHINE_SELECT = `
   JOIN maschinentyp mt ON m.maschinentyp_id = mt.maschinentyp_id
 `;
 
-// GET /api/maschinen?maschinentyp_id=&search=
+const MASCHINEN_FILTERS = {
+  maschinentyp_id: { type: 'in',  col: 'm.maschinentyp_id' },
+  baujahr_von:     { type: 'gte', col: 'm.baujahr' },
+  baujahr_bis:     { type: 'lte', col: 'm.baujahr' },
+};
+
+const MASCHINEN_SORTS = {
+  default:      'm.maschinennr',
+  maschinennr:  'm.maschinennr',
+  maschinentyp: 'mt.maschinentyp_name',
+  baujahr:      'm.baujahr',
+};
+
+// GET /api/maschinen
 router.get('/', async (req, res) => {
   try {
-    const { maschinentyp_id, search } = req.query;
-    const conditions = [];
-    const params = [];
+    const { conditions, params, orderBy, limit, offset } = buildQuery(req.query, MASCHINEN_FILTERS, MASCHINEN_SORTS, { defaultDir: 'asc' });
 
-    if (search) {
-      params.push(`%${search}%`);
-      conditions.push(`(m.maschinennr ILIKE $${params.length} OR mt.maschinentyp_name ILIKE $${params.length})`);
-    }
-    if (maschinentyp_id) {
-      params.push(maschinentyp_id);
-      conditions.push(`m.maschinentyp_id = $${params.length}`);
+    if (req.query.search) {
+      params.push(`%${req.query.search}%`);
+      const p = params.length;
+      conditions.push(`(m.maschinennr ILIKE $${p} OR mt.maschinentyp_name ILIKE $${p})`);
     }
 
     const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
-    const result = await pool.query(`${MASCHINE_SELECT} ${where} ORDER BY m.maschinennr`, params);
-    res.json(result.rows);
+
+    const countResult = await pool.query(
+      `SELECT COUNT(*)::int AS total
+       FROM maschine m
+       JOIN maschinentyp mt ON m.maschinentyp_id = mt.maschinentyp_id
+       ${where}`,
+      params
+    );
+
+    const dataParams = [...params, limit, offset];
+    const result = await pool.query(
+      `${MASCHINE_SELECT} ${where} ORDER BY ${orderBy} LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}`,
+      dataParams
+    );
+    res.json({ data: result.rows, total: countResult.rows[0].total });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -164,11 +186,13 @@ router.get('/:id/tickets', async (req, res) => {
       SELECT t.ticketnr, t.erstellt_am, s.status_name, s.is_terminal,
              k.name_kunde, kr.kritikalität_name AS kritikalitaet_name,
              kr.kritikalität_gewichtung AS kritikalitaet_gewichtung,
+             ka.kategorie_name,
              (SELECT tm.message FROM ticket_messages tm WHERE tm.ticketnr = t.ticketnr ORDER BY tm.created_at ASC LIMIT 1) AS betreff
       FROM ticket t
       LEFT JOIN status s ON t.status_id = s.status_id
       LEFT JOIN kunden k ON t.ticket_kundennummer = k.kundennummer
       LEFT JOIN kritikalität kr ON t.kritikalität_id = kr.kritikalität_id
+      LEFT JOIN kategorie ka ON t.kategorie_id = ka.kategorie_id
       WHERE t.ticket_maschinenid = $1
       ORDER BY t.erstellt_am DESC
     `, [req.params.id]);

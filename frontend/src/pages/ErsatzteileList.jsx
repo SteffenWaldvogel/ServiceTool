@@ -1,6 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../utils/api';
+import FilterBar from '../components/FilterBar';
+import SortableHeader from '../components/SortableHeader';
+import { useFilter } from '../hooks/useFilter';
 
 function ErsatzteilModal({ item, allParts, onClose, onSaved }) {
   const isEdit = !!item;
@@ -45,7 +48,6 @@ function ErsatzteilModal({ item, allParts, onClose, onSaved }) {
     }
   };
 
-  // Exclude self from baugruppe options
   const baugruppeOptions = allParts.filter(p => !isEdit || p.artikelnr !== item.artikelnr);
 
   return (
@@ -122,58 +124,86 @@ function ErsatzteilModal({ item, allParts, onClose, onSaved }) {
 export default function ErsatzteileList() {
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
-  const [maschinentypen, setMaschinentypen] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [allItems, setAllItems] = useState([]); // for baugruppe select in modal
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ search: '', maschinentyp_id: '' });
-  const [modal, setModal] = useState(null); // null | 'create' | { edit: item }
+  const [modal, setModal] = useState(null);
+
+  const { filters, sort, page, setFilter, setSort, setPage, clearFilters, buildParams } = useFilter({});
+
+  const activeFilterCount = Object.values(filters).filter(v => v !== '' && v !== null && v !== undefined).length;
 
   const load = useCallback(() => {
     setLoading(true);
-    const params = {};
-    if (filters.search) params.search = filters.search;
-    if (filters.maschinentyp_id) params.maschinentyp_id = filters.maschinentyp_id;
+    const params = buildParams();
     api.getErsatzteile(params)
-      .then(setItems)
+      .then(res => {
+        if (res && typeof res === 'object' && 'data' in res) {
+          setItems(res.data);
+          setTotal(res.total);
+        } else {
+          setItems(Array.isArray(res) ? res : []);
+          setTotal(Array.isArray(res) ? res.length : 0);
+        }
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [filters]);
+  }, [buildParams]);
 
   useEffect(() => { load(); }, [load]);
 
+  // Load all items for baugruppe select (unfiltered)
   useEffect(() => {
-    api.getMaschinentypen().then(setMaschinentypen).catch(console.error);
+    api.getErsatzteile({ limit: 1000 })
+      .then(res => setAllItems(res && res.data ? res.data : (Array.isArray(res) ? res : [])))
+      .catch(console.error);
   }, []);
 
-  const setFilter = (k) => (e) => setFilters(f => ({ ...f, [k]: e.target.value }));
+  const filterConfig = [
+    { key: 'search', type: 'search', label: 'Bezeichnung', placeholder: 'Suchbegriff…' },
+    { key: 'artikelnr', type: 'search', label: 'Artikelnr.', placeholder: 'z.B. 42' },
+    { key: 'nur_baugruppen', type: 'select', label: 'Typ',
+      options: [{ id: 'false', label: 'Einzelteile' }, { id: 'true', label: 'Baugruppen' }] },
+  ];
+
+  const totalPages = Math.ceil(total / page.limit);
+  const currentPage = Math.floor(page.offset / page.limit) + 1;
 
   return (
     <div className="page">
       <div className="page-header">
         <div>
           <div className="page-title">Ersatzteile</div>
-          <div className="page-subtitle">{items.length} Artikel</div>
+          <div className="page-subtitle">{total} Artikel</div>
         </div>
         <button className="btn btn-primary" onClick={() => setModal('create')}>+ Neues Ersatzteil</button>
       </div>
 
-      <div className="filter-bar">
-        <input
-          className="form-control"
-          placeholder="Suche nach Bezeichnung, Artikelnr., Zusatzbezeichnung…"
-          value={filters.search}
-          onChange={setFilter('search')}
-          style={{ flex: 2 }}
-        />
-        <select className="form-control" value={filters.maschinentyp_id} onChange={setFilter('maschinentyp_id')}>
-          <option value="">Alle Maschinentypen</option>
-          {maschinentypen.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-        </select>
-        <button
-          className="btn btn-secondary btn-sm"
-          onClick={() => setFilters({ search: '', maschinentyp_id: '' })}
-        >
-          Zurücksetzen
-        </button>
+      <FilterBar
+        filterConfig={filterConfig}
+        filters={filters}
+        onFilterChange={setFilter}
+        onClear={clearFilters}
+        activeCount={activeFilterCount}
+      />
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Zeigen:</span>
+          {[25, 50, 100].map(n => (
+            <button key={n} className={`btn btn-sm ${page.limit === n ? 'btn-secondary' : 'btn-ghost'}`}
+              onClick={() => setPage({ limit: n, offset: 0 })}>{n}</button>
+          ))}
+        </div>
+        {total > page.limit && (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}>
+            <button className="btn btn-ghost btn-sm" disabled={currentPage <= 1}
+              onClick={() => setPage(p => ({ ...p, offset: p.offset - p.limit }))}>←</button>
+            <span style={{ color: 'var(--text-secondary)' }}>{currentPage} / {totalPages}</span>
+            <button className="btn btn-ghost btn-sm" disabled={currentPage >= totalPages}
+              onClick={() => setPage(p => ({ ...p, offset: p.offset + p.limit }))}>→</button>
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -188,8 +218,8 @@ export default function ErsatzteileList() {
           <table>
             <thead>
               <tr>
-                <th>Artikel-Nr.</th>
-                <th>Bezeichnung</th>
+                <th><SortableHeader field="artikelnr" label="Artikel-Nr." sort={sort} onSort={setSort} /></th>
+                <th><SortableHeader field="bezeichnung" label="Bezeichnung" sort={sort} onSort={setSort} /></th>
                 <th>Zusatzbezeichnungen</th>
                 <th>Baugruppe</th>
                 <th style={{ textAlign: 'right' }}>Kompatibilität</th>
@@ -260,10 +290,26 @@ export default function ErsatzteileList() {
         </div>
       )}
 
+      {total > page.limit && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 16 }}>
+          <button className="btn btn-ghost btn-sm" disabled={currentPage <= 1}
+            onClick={() => setPage(p => ({ ...p, offset: 0 }))}>«</button>
+          <button className="btn btn-ghost btn-sm" disabled={currentPage <= 1}
+            onClick={() => setPage(p => ({ ...p, offset: p.offset - p.limit }))}>‹</button>
+          <span style={{ padding: '4px 12px', fontSize: 13, color: 'var(--text-secondary)' }}>
+            Seite {currentPage} von {totalPages} ({total} gesamt)
+          </span>
+          <button className="btn btn-ghost btn-sm" disabled={currentPage >= totalPages}
+            onClick={() => setPage(p => ({ ...p, offset: p.offset + p.limit }))}>›</button>
+          <button className="btn btn-ghost btn-sm" disabled={currentPage >= totalPages}
+            onClick={() => setPage({ limit: page.limit, offset: (totalPages - 1) * page.limit })}>»</button>
+        </div>
+      )}
+
       {(modal === 'create' || modal?.edit) && (
         <ErsatzteilModal
           item={modal?.edit || null}
-          allParts={items}
+          allParts={allItems}
           onClose={() => setModal(null)}
           onSaved={() => { setModal(null); load(); }}
         />

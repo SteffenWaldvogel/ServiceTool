@@ -4,6 +4,36 @@ Chronological log of development sessions for the Service Tool project.
 
 ---
 
+## Session 4 – 2026-03-18
+**Ziel:** Lückenschluss – alle offenen Punkte aus Soll/Ist-Analyse schließen
+**Scope:**
+  - Prio 1: QuickCreate in KundenDetail + Filter/Sort in allen Listen
+  - Prio 2: ErsatzteileDetail Kompatibilität + MaschinenDetail Ticket-Tab
+  - Prio 3: seed.sql Positionen + CLAUDE.md aktualisieren
+
+### Tasks
+- ✅ KundenDetail: Inline-Form für Ansprechpartner (mit QuickCreate für Abteilung/Position, DuplicateWarning)
+- ✅ KundenDetail: Inline-Form für Maschinen anlegen (mit QuickCreate Maschinentyp, Dubletten-Check)
+- ✅ KundenDetail: Maschinen-Tabelle mit Navigations-Link zu /maschinen/:id
+- ✅ Backend kunden.js: Filter/Sort/Pagination (queryBuilder, service_priority JOIN, ticket_count)
+- ✅ Frontend KundenList: FilterBar + SortableHeader + Pagination
+- ✅ Backend ansprechpartner.js: Filter/Sort/Pagination
+- ✅ Frontend AnsprechpartnerList: FilterBar + SortableHeader + Pagination
+- ✅ Backend maschinen.js: Filter/Sort/Pagination (queryBuilder, gte/lte Baujahr)
+- ✅ Frontend MaschinenList: FilterBar + SortableHeader + Pagination
+- ✅ Backend ersatzteile.js: Filter/Sort/Pagination (queryBuilder, boolean_null)
+- ✅ Frontend ErsatzteileList: FilterBar + SortableHeader + Pagination
+- ✅ FilterBar: type 'number' hinzugefügt
+- ✅ queryBuilder: 'gte', 'lte', 'boolean_null' ergänzt
+- ✅ MaschinenDetail: Ticket-Historie Tab (vollständige Tabelle)
+- ✅ seed.sql: Positionen ergänzt (Spezialpositionen)
+- ✅ CLAUDE.md: Project Structure aktualisiert
+- ✅ DB_COVERAGE.md: Abdeckung bestätigt
+- ✅ CHANGELOG.md: Session-4-Einträge
+- ✅ Git commit + push
+
+---
+
 ## Session 3 – 2026-03-18
 
 **Objective:** Implement GitHub integration, QuickCreate inline entity creation, duplicate detection, advanced filtering/sorting with pagination, and supporting infrastructure.

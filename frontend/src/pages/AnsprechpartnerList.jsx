@@ -1,6 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../utils/api';
+import FilterBar from '../components/FilterBar';
+import SortableHeader from '../components/SortableHeader';
+import { useFilter } from '../hooks/useFilter';
 
 function CreateAnsprechpartnerModal({ onClose, onSaved }) {
   const [kunden, setKunden] = useState([]);
@@ -22,7 +25,8 @@ function CreateAnsprechpartnerModal({ onClose, onSaved }) {
       api.getKunden({ limit: 500 }),
       api.getAbteilungen(),
     ]).then(([k, a]) => {
-      setKunden(k);
+      const kundenArr = k && k.data ? k.data : (Array.isArray(k) ? k : []);
+      setKunden(kundenArr);
       setAbteilungen(a);
     }).catch(console.error);
   }, []);
@@ -130,48 +134,83 @@ function CreateAnsprechpartnerModal({ onClose, onSaved }) {
 export default function AnsprechpartnerList() {
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [kundenFilter, setKundenFilter] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [abteilungen, setAbteilungen] = useState([]);
+
+  const { filters, sort, page, setFilter, setSort, setPage, clearFilters, buildParams } = useFilter({});
+
+  const activeFilterCount = Object.values(filters).filter(v => v !== '' && v !== null && v !== undefined).length;
 
   const load = useCallback(() => {
     setLoading(true);
-    const params = {};
-    if (search) params.search = search;
-    if (kundenFilter) params.kunden_id = kundenFilter;
+    const params = buildParams();
     api.getAnsprechpartner(params)
-      .then(setItems)
+      .then(res => {
+        if (res && typeof res === 'object' && 'data' in res) {
+          setItems(res.data);
+          setTotal(res.total);
+        } else {
+          setItems(Array.isArray(res) ? res : []);
+          setTotal(Array.isArray(res) ? res.length : 0);
+        }
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [search, kundenFilter]);
+  }, [buildParams]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    api.getAbteilungen().then(setAbteilungen).catch(console.error);
+  }, []);
+
+  const filterConfig = [
+    { key: 'search', type: 'search', label: 'Name', placeholder: 'Name…' },
+    { key: 'email', type: 'search', label: 'E-Mail', placeholder: 'email@…', advanced: true },
+    { key: 'abteilung_id', type: 'select', label: 'Abteilung', options: abteilungen.map(a => ({ id: a.abteilung_id || a.id, label: a.abteilung_name || a.name })), advanced: true },
+  ];
+
+  const totalPages = Math.ceil(total / page.limit);
+  const currentPage = Math.floor(page.offset / page.limit) + 1;
 
   return (
     <div className="page">
       <div className="page-header">
         <div>
           <div className="page-title">Ansprechpartner</div>
-          <div className="page-subtitle">{items.length} Ansprechpartner</div>
+          <div className="page-subtitle">{total} Ansprechpartner</div>
         </div>
         <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ Neuer Ansprechpartner</button>
       </div>
 
-      <div className="filter-bar">
-        <input
-          className="form-control"
-          placeholder="Suche nach Name oder E-Mail…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          style={{ flex: 2 }}
-        />
-        <button
-          className="btn btn-secondary btn-sm"
-          onClick={() => { setSearch(''); setKundenFilter(''); }}
-        >
-          Zurücksetzen
-        </button>
+      <FilterBar
+        filterConfig={filterConfig}
+        filters={filters}
+        onFilterChange={setFilter}
+        onClear={clearFilters}
+        activeCount={activeFilterCount}
+      />
+
+      {/* Page size + pagination top */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Zeigen:</span>
+          {[25, 50, 100].map(n => (
+            <button key={n} className={`btn btn-sm ${page.limit === n ? 'btn-secondary' : 'btn-ghost'}`}
+              onClick={() => setPage({ limit: n, offset: 0 })}>{n}</button>
+          ))}
+        </div>
+        {total > page.limit && (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}>
+            <button className="btn btn-ghost btn-sm" disabled={currentPage <= 1}
+              onClick={() => setPage(p => ({ ...p, offset: p.offset - p.limit }))}>←</button>
+            <span style={{ color: 'var(--text-secondary)' }}>{currentPage} / {totalPages}</span>
+            <button className="btn btn-ghost btn-sm" disabled={currentPage >= totalPages}
+              onClick={() => setPage(p => ({ ...p, offset: p.offset + p.limit }))}>→</button>
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -186,17 +225,17 @@ export default function AnsprechpartnerList() {
           <table>
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Kunde</th>
-                <th>Abteilung</th>
-                <th>Position</th>
+                <th><SortableHeader field="name" label="Name" sort={sort} onSort={setSort} /></th>
+                <th><SortableHeader field="kunde" label="Kunde" sort={sort} onSort={setSort} /></th>
+                <th><SortableHeader field="abteilung" label="Abteilung" sort={sort} onSort={setSort} /></th>
+                <th><SortableHeader field="position" label="Position" sort={sort} onSort={setSort} /></th>
                 <th>E-Mail</th>
                 <th>Telefon</th>
               </tr>
             </thead>
             <tbody>
               {items.map(ap => (
-                <tr key={ap.ansprechpartnerid} onClick={() => navigate(`/ansprechpartner/${ap.ansprechpartnerid}`)}>
+                <tr key={ap.ansprechpartnerid} style={{ cursor: 'pointer' }} onClick={() => navigate(`/ansprechpartner/${ap.ansprechpartnerid}`)}>
                   <td style={{ fontWeight: 500 }}>{ap.ansprechpartner_name}</td>
                   <td>
                     {ap.name_kunde ? (
@@ -221,6 +260,23 @@ export default function AnsprechpartnerList() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Bottom pagination */}
+      {total > page.limit && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 16 }}>
+          <button className="btn btn-ghost btn-sm" disabled={currentPage <= 1}
+            onClick={() => setPage(p => ({ ...p, offset: 0 }))}>«</button>
+          <button className="btn btn-ghost btn-sm" disabled={currentPage <= 1}
+            onClick={() => setPage(p => ({ ...p, offset: p.offset - p.limit }))}>‹</button>
+          <span style={{ padding: '4px 12px', fontSize: 13, color: 'var(--text-secondary)' }}>
+            Seite {currentPage} von {totalPages} ({total} gesamt)
+          </span>
+          <button className="btn btn-ghost btn-sm" disabled={currentPage >= totalPages}
+            onClick={() => setPage(p => ({ ...p, offset: p.offset + p.limit }))}>›</button>
+          <button className="btn btn-ghost btn-sm" disabled={currentPage >= totalPages}
+            onClick={() => setPage({ limit: page.limit, offset: (totalPages - 1) * page.limit })}>»</button>
         </div>
       )}
 

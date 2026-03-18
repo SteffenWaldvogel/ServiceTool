@@ -60,6 +60,21 @@ function buildQuery(queryObj, filterDefs, sortDefs, options = {}) {
         }
         break;
       }
+      case 'gte': {
+        params.push(raw);
+        conditions.push(`${def.col} >= $${params.length}`);
+        break;
+      }
+      case 'lte': {
+        params.push(raw);
+        conditions.push(`${def.col} <= $${params.length}`);
+        break;
+      }
+      case 'boolean_null': {
+        if (raw === 'true')  conditions.push(`${def.col} IS NOT NULL`);
+        if (raw === 'false') conditions.push(`${def.col} IS NULL`);
+        break;
+      }
       default:
         break;
     }

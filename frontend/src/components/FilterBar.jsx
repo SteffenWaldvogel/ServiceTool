@@ -75,6 +75,19 @@ function renderFilter(f, filters, onChange) {
       </label>
     );
   }
+  if (f.type === 'number') {
+    return (
+      <input
+        key={f.key}
+        type="number"
+        className="form-control"
+        style={{ width: 100 }}
+        placeholder={f.placeholder}
+        value={filters[f.key] || ''}
+        onChange={e => onChange(f.key, e.target.value || '')}
+      />
+    );
+  }
   if (f.type === 'daterange') {
     return (
       <React.Fragment key={f.key}>

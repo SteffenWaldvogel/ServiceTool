@@ -42,6 +42,47 @@ VALUES
 ('Sachbearbeiter',   (SELECT abteilung_id FROM abteilung WHERE abteilung_name = 'Sachbearbeiter'),          'Allgemeiner Sachbearbeiter')
 ON CONFLICT DO NOTHING;
 
+-- Spezialpositionen
+INSERT INTO position (position_name, abteilung_id, position_beschreibung)
+VALUES
+  ('Servicetechniker Außendienst',
+   (SELECT abteilung_id FROM abteilung WHERE abteilung_name = 'Service/Instandhaltung'),
+   'Außendienst-Servicetechniker für Vor-Ort-Einsätze'),
+  ('Servicetechniker Innendienst',
+   (SELECT abteilung_id FROM abteilung WHERE abteilung_name = 'Service/Instandhaltung'),
+   'Innendienst Service und Telefon-Support'),
+  ('Außendienstmitarbeiter',
+   (SELECT abteilung_id FROM abteilung WHERE abteilung_name = 'Vertrieb'),
+   'Vertrieb Außendienst'),
+  ('Key Account Manager',
+   (SELECT abteilung_id FROM abteilung WHERE abteilung_name = 'Vertrieb'),
+   'Betreuung von Schlüsselkunden'),
+  ('Verkaufsinnendienst',
+   (SELECT abteilung_id FROM abteilung WHERE abteilung_name = 'Verkauf'),
+   'Auftragsbearbeitung und Angebotserstellung'),
+  ('Einkäufer',
+   (SELECT abteilung_id FROM abteilung WHERE abteilung_name = 'Einkauf'),
+   'Beschaffung und Lieferantenmanagement'),
+  ('Qualitätsprüfer',
+   (SELECT abteilung_id FROM abteilung WHERE abteilung_name = 'QS/QN'),
+   'Qualitätssicherung und Prüfung'),
+  ('QM-Beauftragter',
+   (SELECT abteilung_id FROM abteilung WHERE abteilung_name = 'QS/QN'),
+   'Qualitätsmanagement-Beauftragter'),
+  ('Buchhalter',
+   (SELECT abteilung_id FROM abteilung WHERE abteilung_name = 'Buchhaltung'),
+   'Finanzbuchhaltung'),
+  ('Lagerist',
+   (SELECT abteilung_id FROM abteilung WHERE abteilung_name = 'Logistik'),
+   'Lagerverwaltung und Kommissionierung'),
+  ('Logistikkoordinator',
+   (SELECT abteilung_id FROM abteilung WHERE abteilung_name = 'Logistik'),
+   'Versand- und Logistikkoordination'),
+  ('Sachbearbeiter',
+   (SELECT abteilung_id FROM abteilung WHERE abteilung_name = 'Sachbearbeiter'),
+   'Allgemeine Sachbearbeitung')
+ON CONFLICT (position_name, abteilung_id) DO NOTHING;
+
 
 -- ── 3. KATEGORIEN ────────────────────────────────────────────────────────────
 TRUNCATE kategorie CASCADE;

@@ -2,6 +2,9 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../utils/api';
 import QuickCreate from '../components/QuickCreate';
+import FilterBar from '../components/FilterBar';
+import SortableHeader from '../components/SortableHeader';
+import { useFilter } from '../hooks/useFilter';
 
 function MaschineModal({ item, maschinentypen, onClose, onSaved, onMaschinentypenUpdate }) {
   const isEdit = !!item;
@@ -119,21 +122,31 @@ function MaschineModal({ item, maschinentypen, onClose, onSaved, onMaschinentype
 export default function MaschinenList() {
   const navigate = useNavigate();
   const [maschinen, setMaschinen] = useState([]);
+  const [total, setTotal] = useState(0);
   const [maschinentypen, setMaschinentypen] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ search: '', maschinentyp_id: '' });
-  const [modal, setModal] = useState(null); // null | 'create' | { edit: item }
+  const [modal, setModal] = useState(null);
+
+  const { filters, sort, page, setFilter, setSort, setPage, clearFilters, buildParams } = useFilter({});
+
+  const activeFilterCount = Object.values(filters).filter(v => v !== '' && v !== null && v !== undefined).length;
 
   const load = useCallback(() => {
     setLoading(true);
-    const params = {};
-    if (filters.search) params.search = filters.search;
-    if (filters.maschinentyp_id) params.maschinentyp_id = filters.maschinentyp_id;
+    const params = buildParams();
     api.getMaschinen(params)
-      .then(setMaschinen)
+      .then(res => {
+        if (res && typeof res === 'object' && 'data' in res) {
+          setMaschinen(res.data);
+          setTotal(res.total);
+        } else {
+          setMaschinen(Array.isArray(res) ? res : []);
+          setTotal(Array.isArray(res) ? res.length : 0);
+        }
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [filters]);
+  }, [buildParams]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -141,36 +154,51 @@ export default function MaschinenList() {
     api.getMaschinentypen().then(setMaschinentypen).catch(console.error);
   }, []);
 
-  const setFilter = (k) => (e) => setFilters(f => ({ ...f, [k]: e.target.value }));
+  const filterConfig = [
+    { key: 'search', type: 'search', label: 'Maschinennr.', placeholder: 'z.B. CNC-…' },
+    { key: 'maschinentyp_id', type: 'select', label: 'Maschinentyp', options: maschinentypen.map(m => ({ id: m.id || m.maschinentyp_id, label: m.name || m.maschinentyp_name })) },
+    { key: 'baujahr_von', type: 'number', label: 'Baujahr von', placeholder: '1990', advanced: true },
+    { key: 'baujahr_bis', type: 'number', label: 'Baujahr bis', placeholder: '2024', advanced: true },
+  ];
+
+  const totalPages = Math.ceil(total / page.limit);
+  const currentPage = Math.floor(page.offset / page.limit) + 1;
 
   return (
     <div className="page">
       <div className="page-header">
         <div>
           <div className="page-title">Maschinen</div>
-          <div className="page-subtitle">{maschinen.length} Maschinen</div>
+          <div className="page-subtitle">{total} Maschinen</div>
         </div>
         <button className="btn btn-primary" onClick={() => setModal('create')}>+ Neue Maschine</button>
       </div>
 
-      <div className="filter-bar">
-        <input
-          className="form-control"
-          placeholder="Suche nach Maschinennr. oder Typ…"
-          value={filters.search}
-          onChange={setFilter('search')}
-          style={{ flex: 2 }}
-        />
-        <select className="form-control" value={filters.maschinentyp_id} onChange={setFilter('maschinentyp_id')}>
-          <option value="">Alle Maschinentypen</option>
-          {maschinentypen.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-        </select>
-        <button
-          className="btn btn-secondary btn-sm"
-          onClick={() => setFilters({ search: '', maschinentyp_id: '' })}
-        >
-          Zurücksetzen
-        </button>
+      <FilterBar
+        filterConfig={filterConfig}
+        filters={filters}
+        onFilterChange={setFilter}
+        onClear={clearFilters}
+        activeCount={activeFilterCount}
+      />
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Zeigen:</span>
+          {[25, 50, 100].map(n => (
+            <button key={n} className={`btn btn-sm ${page.limit === n ? 'btn-secondary' : 'btn-ghost'}`}
+              onClick={() => setPage({ limit: n, offset: 0 })}>{n}</button>
+          ))}
+        </div>
+        {total > page.limit && (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}>
+            <button className="btn btn-ghost btn-sm" disabled={currentPage <= 1}
+              onClick={() => setPage(p => ({ ...p, offset: p.offset - p.limit }))}>←</button>
+            <span style={{ color: 'var(--text-secondary)' }}>{currentPage} / {totalPages}</span>
+            <button className="btn btn-ghost btn-sm" disabled={currentPage >= totalPages}
+              onClick={() => setPage(p => ({ ...p, offset: p.offset + p.limit }))}>→</button>
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -186,10 +214,10 @@ export default function MaschinenList() {
             <thead>
               <tr>
                 <th>ID</th>
-                <th>Maschinennummer</th>
+                <th><SortableHeader field="maschinennr" label="Maschinennummer" sort={sort} onSort={setSort} /></th>
                 <th>Bezeichnung</th>
-                <th>Typ</th>
-                <th>Baujahr</th>
+                <th><SortableHeader field="maschinentyp" label="Typ" sort={sort} onSort={setSort} /></th>
+                <th><SortableHeader field="baujahr" label="Baujahr" sort={sort} onSort={setSort} /></th>
                 <th></th>
               </tr>
             </thead>
@@ -236,6 +264,22 @@ export default function MaschinenList() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {total > page.limit && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 16 }}>
+          <button className="btn btn-ghost btn-sm" disabled={currentPage <= 1}
+            onClick={() => setPage(p => ({ ...p, offset: 0 }))}>«</button>
+          <button className="btn btn-ghost btn-sm" disabled={currentPage <= 1}
+            onClick={() => setPage(p => ({ ...p, offset: p.offset - p.limit }))}>‹</button>
+          <span style={{ padding: '4px 12px', fontSize: 13, color: 'var(--text-secondary)' }}>
+            Seite {currentPage} von {totalPages} ({total} gesamt)
+          </span>
+          <button className="btn btn-ghost btn-sm" disabled={currentPage >= totalPages}
+            onClick={() => setPage(p => ({ ...p, offset: p.offset + p.limit }))}>›</button>
+          <button className="btn btn-ghost btn-sm" disabled={currentPage >= totalPages}
+            onClick={() => setPage({ limit: page.limit, offset: (totalPages - 1) * page.limit })}>»</button>
         </div>
       )}
 

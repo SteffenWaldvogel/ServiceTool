@@ -10,6 +10,7 @@ const TICKET_FILTERS = {
   kritikalitaet_id:    { type: 'in',        col: "t.\"kritikalität_id\"" },
   ticket_kundennummer: { type: 'exact',     col: 't.ticket_kundennummer' },
   kunden_id:           { type: 'exact',     col: 't.ticket_kundennummer' },
+  ticket_maschinenid:  { type: 'exact',     col: 't.ticket_maschinenid' },
   erstellt_von:        { type: 'ilike',     col: 't.erstellt_von' },
   date_from:           { type: 'date_from', col: 't.erstellt_am' },
   date_to:             { type: 'date_to',   col: 't.erstellt_am' },

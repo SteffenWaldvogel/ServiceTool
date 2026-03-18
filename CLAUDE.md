@@ -12,16 +12,25 @@ ServiceTool/
 ├── backend/
 │   ├── src/
 │   │   ├── server.js              # Express entry point
-│   │   ├── config/database.js     # pg Pool
+│   │   ├── config/
+│   │   │   ├── database.js        # pg Pool
+│   │   │   └── seed.sql           # Stammdaten-Seed (idempotent)
 │   │   ├── routes/
 │   │   │   ├── tickets.js         # CRUD /api/tickets + messages
 │   │   │   ├── kunden.js          # CRUD /api/kunden (mit Emails/Telefon in Transaktion)
 │   │   │   ├── lookup.js          # Stammdaten + /api/lookup/dashboard-stats
 │   │   │   ├── maschinen.js       # CRUD /api/maschinen (global)
 │   │   │   ├── maschinentypen.js  # CRUD /api/maschinentypen
-│   │   │   └── ersatzteile.js     # CRUD /api/ersatzteile + Kompatibilität
-│   │   └── services/
-│   │       └── emailService.js    # IMAP polling + SMTP
+│   │   │   ├── ersatzteile.js     # CRUD /api/ersatzteile + Kompatibilität
+│   │   │   ├── ansprechpartner.js # Standalone CRUD /api/ansprechpartner
+│   │   │   ├── stammdaten.js      # Admin-CRUD Referenzdaten (Abteilung, Position, etc.)
+│   │   │   ├── customFieldsAdmin.js # Admin-CRUD custom_field_definitions + options
+│   │   │   └── system.js          # GET /api/system/audit-log
+│   │   ├── services/
+│   │   │   ├── emailService.js    # IMAP polling + SMTP
+│   │   │   └── matchingService.js # Levenshtein-Dubletten-Matching
+│   │   └── utils/
+│   │       └── queryBuilder.js    # Generic filter/sort/pagination builder
 │   ├── .env.example
 │   └── package.json
 ├── frontend/
@@ -30,18 +39,38 @@ ServiceTool/
 │   │   ├── main.jsx
 │   │   ├── pages/
 │   │   │   ├── Dashboard.jsx      # Stat tiles + charts + recent tickets
-│   │   │   ├── TicketList.jsx     # Table, filter, create modal
+│   │   │   ├── TicketList.jsx     # Table, filter/sort/pagination, create modal
 │   │   │   ├── TicketDetail.jsx   # Inline editing + messages + Kunde sidebar
-│   │   │   ├── KundenList.jsx     # Search + ticket counter
-│   │   │   ├── KundenDetail.jsx   # Stammdaten, Ansprechpartner, Maschinen, Tickets
-│   │   │   ├── MaschinenList.jsx  # Global machine CRUD
-│   │   │   └── ErsatzteileList.jsx # Spare parts CRUD
-│   │   ├── utils/api.js           # fetch wrapper for all API calls
+│   │   │   ├── KundenList.jsx     # Filter/sort/pagination + ticket counter
+│   │   │   ├── KundenDetail.jsx   # Stammdaten, Inline-AP-Form, Inline-Maschinen-Form, Tickets
+│   │   │   ├── MaschinenList.jsx  # Filter/sort/pagination + CRUD
+│   │   │   ├── MaschinenDetail.jsx# Tabs: Stammdaten | Ticket-Historie
+│   │   │   ├── ErsatzteileList.jsx# Filter/sort/pagination + CRUD
+│   │   │   ├── ErsatzteileDetail.jsx # Kompatibilität Baujahr + Nummer
+│   │   │   ├── AnsprechpartnerList.jsx # Filter/sort/pagination
+│   │   │   ├── AnsprechpartnerDetail.jsx # Inline-edit + Kunde-Sidebar
+│   │   │   ├── StammdatenPage.jsx # Tabbed admin für alle Referenzdaten
+│   │   │   └── SystemPage.jsx     # Audit-Log Viewer
+│   │   ├── components/
+│   │   │   ├── CustomFieldsSection.jsx # Freifelder pro Entity
+│   │   │   ├── QuickCreate.jsx    # Searchable dropdown + Inline-Anlegen
+│   │   │   ├── DuplicateWarning.jsx # Dubletten-Warnung mit Score
+│   │   │   ├── FilterBar.jsx      # Primary + Advanced Filter mit Chips
+│   │   │   └── SortableHeader.jsx # Sortierbare Spaltenköpfe
+│   │   ├── hooks/
+│   │   │   └── useFilter.js       # Filter/Sort/Pagination State Hook
+│   │   ├── utils/
+│   │   │   ├── api.js             # fetch wrapper für alle API-Calls
+│   │   │   └── helpers.js         # getKritColor, parseKategorie
 │   │   └── styles/global.css      # Dark industrial theme
 │   ├── index.html
 │   ├── vite.config.js             # proxy /api → :3001
 │   └── package.json
+├── docs/
+│   └── DB_COVERAGE.md             # Tabellen-Coverage-Matrix
 ├── database_schema.sql            # PostgreSQL schema + seed data
+├── CHANGELOG.md
+├── DEVLOG.md
 ├── package.json                   # root scripts: dev:backend, dev:frontend
 ├── .gitignore
 └── CLAUDE.md
@@ -84,26 +113,72 @@ npm run dev
 4. Enable IMAP in Gmail settings
 
 ## API Endpoints
-- `GET/POST /api/tickets` – list (filterable) / create
+
+### Tickets
+- `GET/POST /api/tickets` – list (filter/sort/pagination → `{ data, total }`) / create
 - `GET/PUT/DELETE /api/tickets/:id`
-- `GET/POST /api/kunden` – list (searchable) / create with emails+telefon in transaction
+- `GET /api/tickets/:id/messages`
+- `POST /api/tickets/:id/messages`
+
+### Kunden
+- `GET/POST /api/kunden` – list (`{ data, total }`) / create with emails+telefon in transaction
 - `GET/PUT/DELETE /api/kunden/:id`
 - `GET /api/kunden/:id/tickets`
 - `POST /api/kunden/:id/ansprechpartner`
 - `PUT/DELETE /api/kunden/:id/ansprechpartner/:apId`
-- `GET/POST /api/maschinen` – global machines list / create
+- `POST /api/kunden/match` – Dubletten-Check
+
+### Ansprechpartner (standalone)
+- `GET /api/ansprechpartner` – list (`{ data, total }`) mit Filter/Sort/Pagination
+- `GET/PUT/DELETE /api/ansprechpartner/:id`
+- `POST /api/ansprechpartner`
+- `POST /api/ansprechpartner/match` – Dubletten-Check
+
+### Maschinen
+- `GET/POST /api/maschinen` – list (`{ data, total }`) / create
 - `GET/PUT/DELETE /api/maschinen/:id`
+- `GET /api/maschinen/:id/tickets`
+- `POST /api/maschinen/match` – Dubletten-Check
+
+### Maschinentypen
 - `GET/POST /api/maschinentypen`
-- `GET/POST /api/ersatzteile` – spare parts list / create
+- `PUT/DELETE /api/maschinentypen/:id`
+
+### Ersatzteile
+- `GET/POST /api/ersatzteile` – list (`{ data, total }`) / create
 - `GET/PUT/DELETE /api/ersatzteile/:id`
-- `POST/DELETE /api/ersatzteile/:id/kompatibilitaet-baujahr`
-- `POST/DELETE /api/ersatzteile/:id/kompatibilitaet-nummer`
-- `GET /api/tickets/:id/messages`
-- `POST /api/tickets/:id/messages`
+- `GET/POST/DELETE /api/ersatzteile/:id/kompatibilitaet-baujahr`
+- `GET/POST/DELETE /api/ersatzteile/:id/kompatibilitaet-nummer`
+
+### Lookup (read-only)
 - `GET /api/lookup/status|kategorien|kritikalitaeten|maschinentypen|service-priorities`
 - `GET /api/lookup/abteilungen`
 - `GET /api/lookup/positionen?abteilung_id=`
 - `GET /api/lookup/dashboard-stats`
+
+### Stammdaten Admin (CRUD)
+- `GET/POST /api/stammdaten/abteilungen`
+- `PUT/DELETE /api/stammdaten/abteilungen/:id`
+- `GET/POST /api/stammdaten/positionen`
+- `PUT/DELETE /api/stammdaten/positionen/:id`
+- `GET/POST /api/stammdaten/kategorien`
+- `PUT/DELETE /api/stammdaten/kategorien/:id`
+- `GET/POST /api/stammdaten/kritikalitaet`
+- `PUT/DELETE /api/stammdaten/kritikalitaet/:id`
+- `GET/POST /api/stammdaten/status`
+- `PUT/DELETE /api/stammdaten/status/:id`
+- `GET/POST /api/stammdaten/service-priority`
+- `PUT/DELETE /api/stammdaten/service-priority/:id`
+
+### Custom Fields Admin
+- `GET/POST /api/custom-fields/definitions`
+- `PUT/DELETE /api/custom-fields/definitions/:table/:key`
+- `GET /api/custom-fields/options/:table/:key`
+- `POST /api/custom-fields/options`
+- `PUT/DELETE /api/custom-fields/options/:table/:key/:value`
+
+### System
+- `GET /api/system/audit-log`
 
 ## Design
 Dark industrial theme using CSS custom properties in `global.css`.

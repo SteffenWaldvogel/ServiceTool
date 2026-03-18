@@ -1,23 +1,57 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/database');
+const buildQuery = require('../utils/queryBuilder');
 
-// GET /api/kunden?search=
+const KUNDEN_FILTERS = {
+  matchcode:           { type: 'ilike', col: 'k.matchcode' },
+  plz:                 { type: 'ilike', col: 'k.plz' },
+  ort:                 { type: 'ilike', col: 'k.ort' },
+  service_priority_id: { type: 'in',   col: 'k.service_priority_id' },
+};
+
+const KUNDEN_SORTS = {
+  default:          'k.name_kunde',
+  name_kunde:       'k.name_kunde',
+  kundennummer:     'k.kundennummer',
+  ort:              'k.ort',
+  plz:              'k.plz',
+  service_priority: 'sp.priority_order',
+  ticket_count:     'ticket_count',
+};
+
+// GET /api/kunden
 router.get('/', async (req, res) => {
   try {
-    const { search, limit = 50, offset = 0 } = req.query;
-    const params = [];
-    let where = '';
-    if (search) {
-      params.push(`%${search}%`);
-      where = `WHERE k.name_kunde ILIKE $1 OR k.ort ILIKE $1 OR k.matchcode ILIKE $1`;
+    const { conditions, params, orderBy, limit, offset } = buildQuery(req.query, KUNDEN_FILTERS, KUNDEN_SORTS, { defaultDir: 'asc' });
+
+    // Search on name_kunde OR matchcode (special OR handling)
+    if (req.query.search) {
+      params.push(`%${req.query.search}%`);
+      const p = params.length;
+      conditions.push(`(k.name_kunde ILIKE $${p} OR k.matchcode ILIKE $${p})`);
     }
+
+    const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+
+    // Count query
+    const countResult = await pool.query(
+      `SELECT COUNT(*)::int AS total
+       FROM kunden k
+       LEFT JOIN service_priority sp ON k.service_priority_id = sp.service_priority_id
+       ${where}`,
+      params
+    );
+
+    const dataParams = [...params, limit, offset];
     const query = `
       SELECT
         k.kundennummer, k.matchcode, k.name_kunde, k.zusatz,
         k.straße, k.hausnr, k.plz, k.ort, k.land,
         k.bemerkung_kunde, k.created_at, k.updated_at,
+        k.service_priority_id,
         sp.service_priority_name,
+        (SELECT COUNT(*)::int FROM ticket WHERE ticket_kundennummer = k.kundennummer) AS ticket_count,
         COUNT(DISTINCT t.ticketnr)::int AS ticket_anzahl,
         COUNT(DISTINCT t.ticketnr) FILTER (
           WHERE t.status_id IN (SELECT status_id FROM status WHERE is_terminal = false)
@@ -26,13 +60,12 @@ router.get('/', async (req, res) => {
       LEFT JOIN service_priority sp ON k.service_priority_id = sp.service_priority_id
       LEFT JOIN ticket t ON t.ticket_kundennummer = k.kundennummer
       ${where}
-      GROUP BY k.kundennummer, sp.service_priority_name
-      ORDER BY k.name_kunde
-      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+      GROUP BY k.kundennummer, sp.service_priority_name, sp.priority_order
+      ORDER BY ${orderBy}
+      LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}
     `;
-    params.push(limit, offset);
-    const result = await pool.query(query, params);
-    res.json(result.rows);
+    const result = await pool.query(query, dataParams);
+    res.json({ data: result.rows, total: countResult.rows[0].total });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

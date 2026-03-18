@@ -1,6 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../utils/api';
+import FilterBar from '../components/FilterBar';
+import SortableHeader from '../components/SortableHeader';
+import { useFilter } from '../hooks/useFilter';
 
 function CreateKundeModal({ onClose, onCreated }) {
   const [form, setForm] = useState({
@@ -184,38 +187,84 @@ function CreateKundeModal({ onClose, onCreated }) {
 
 export default function KundenList() {
   const [kunden, setKunden] = useState([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [servicePriorities, setServicePriorities] = useState([]);
   const navigate = useNavigate();
+
+  const { filters, sort, page, setFilter, setSort, setPage, clearFilters, buildParams } = useFilter({});
+
+  const activeFilterCount = Object.values(filters).filter(v => v !== '' && v !== null && v !== undefined).length;
 
   const load = useCallback(() => {
     setLoading(true);
-    api.getKunden(search ? { search } : {})
-      .then(setKunden)
+    const params = buildParams();
+    api.getKunden(params)
+      .then(res => {
+        if (res && typeof res === 'object' && 'data' in res) {
+          setKunden(res.data);
+          setTotal(res.total);
+        } else {
+          setKunden(Array.isArray(res) ? res : []);
+          setTotal(Array.isArray(res) ? res.length : 0);
+        }
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [search]);
+  }, [buildParams]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    api.getServicePriorities().then(setServicePriorities).catch(console.error);
+  }, []);
+
+  const filterConfig = [
+    { key: 'search', type: 'search', label: 'Suche', placeholder: 'Name, Matchcode…' },
+    { key: 'plz', type: 'search', label: 'PLZ', placeholder: 'z.B. 70…' },
+    { key: 'service_priority_id', type: 'select', label: 'Priority', options: servicePriorities.map(s => ({ id: s.id || s.service_priority_id, label: s.name || s.priority_name || s.service_priority_name })) },
+  ];
+
+  const totalPages = Math.ceil(total / page.limit);
+  const currentPage = Math.floor(page.offset / page.limit) + 1;
 
   return (
     <div className="page">
       <div className="page-header">
         <div>
           <div className="page-title">Kunden</div>
-          <div className="page-subtitle">{kunden.length} Kunden</div>
+          <div className="page-subtitle">{total} Kunden</div>
         </div>
         <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ Neuer Kunde</button>
       </div>
 
-      <div className="filter-bar">
-        <input
-          className="form-control"
-          placeholder="Suche nach Name, Matchcode oder Ort…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
+      <FilterBar
+        filterConfig={filterConfig}
+        filters={filters}
+        onFilterChange={setFilter}
+        onClear={clearFilters}
+        activeCount={activeFilterCount}
+      />
+
+      {/* Page size selector */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Zeigen:</span>
+          {[25, 50, 100].map(n => (
+            <button key={n} className={`btn btn-sm ${page.limit === n ? 'btn-secondary' : 'btn-ghost'}`}
+              onClick={() => setPage({ limit: n, offset: 0 })}>{n}</button>
+          ))}
+        </div>
+        {total > page.limit && (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}>
+            <button className="btn btn-ghost btn-sm" disabled={currentPage <= 1}
+              onClick={() => setPage(p => ({ ...p, offset: p.offset - p.limit }))}>←</button>
+            <span style={{ color: 'var(--text-secondary)' }}>{currentPage} / {totalPages}</span>
+            <button className="btn btn-ghost btn-sm" disabled={currentPage >= totalPages}
+              onClick={() => setPage(p => ({ ...p, offset: p.offset + p.limit }))}>→</button>
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -230,12 +279,13 @@ export default function KundenList() {
           <table>
             <thead>
               <tr>
-                <th>Nr.</th>
+                <th><SortableHeader field="kundennummer" label="Nr." sort={sort} onSort={setSort} /></th>
                 <th>Matchcode</th>
-                <th>Firmenname</th>
-                <th>Ort</th>
-                <th>Service-Priorität</th>
-                <th style={{ textAlign: 'right' }}>Tickets</th>
+                <th><SortableHeader field="name_kunde" label="Firmenname" sort={sort} onSort={setSort} /></th>
+                <th><SortableHeader field="ort" label="Ort" sort={sort} onSort={setSort} /></th>
+                <th><SortableHeader field="plz" label="PLZ" sort={sort} onSort={setSort} /></th>
+                <th><SortableHeader field="service_priority" label="Priority" sort={sort} onSort={setSort} /></th>
+                <th style={{ textAlign: 'right' }}><SortableHeader field="ticket_count" label="Tickets" sort={sort} onSort={setSort} /></th>
                 <th style={{ textAlign: 'right' }}>Offen</th>
               </tr>
             </thead>
@@ -248,14 +298,15 @@ export default function KundenList() {
                     {k.name_kunde}
                     {k.zusatz && <span className="text-muted" style={{ fontWeight: 400, marginLeft: 6, fontSize: 12 }}>{k.zusatz}</span>}
                   </td>
-                  <td>{[k.plz, k.ort].filter(Boolean).join(' ') || <span className="text-muted">–</span>}</td>
+                  <td>{k.ort || <span className="text-muted">–</span>}</td>
+                  <td>{k.plz || <span className="text-muted">–</span>}</td>
                   <td>
                     {k.service_priority_name
                       ? <span className="badge" style={{ background: 'rgba(59,130,246,0.15)', color: 'var(--accent)' }}>{k.service_priority_name}</span>
                       : <span className="text-muted">–</span>
                     }
                   </td>
-                  <td style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono', fontSize: 13 }}>{k.ticket_anzahl}</td>
+                  <td style={{ textAlign: 'right', fontFamily: 'IBM Plex Mono', fontSize: 13 }}>{k.ticket_count ?? k.ticket_anzahl ?? 0}</td>
                   <td style={{ textAlign: 'right' }}>
                     {k.offene_tickets > 0
                       ? <span className="badge" style={{ background: 'rgba(59,130,246,0.15)', color: 'var(--accent)' }}>{k.offene_tickets}</span>
@@ -266,6 +317,23 @@ export default function KundenList() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Bottom pagination */}
+      {total > page.limit && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 16 }}>
+          <button className="btn btn-ghost btn-sm" disabled={currentPage <= 1}
+            onClick={() => setPage(p => ({ ...p, offset: 0 }))}>«</button>
+          <button className="btn btn-ghost btn-sm" disabled={currentPage <= 1}
+            onClick={() => setPage(p => ({ ...p, offset: p.offset - p.limit }))}>‹</button>
+          <span style={{ padding: '4px 12px', fontSize: 13, color: 'var(--text-secondary)' }}>
+            Seite {currentPage} von {totalPages} ({total} gesamt)
+          </span>
+          <button className="btn btn-ghost btn-sm" disabled={currentPage >= totalPages}
+            onClick={() => setPage(p => ({ ...p, offset: p.offset + p.limit }))}>›</button>
+          <button className="btn btn-ghost btn-sm" disabled={currentPage >= totalPages}
+            onClick={() => setPage({ limit: page.limit, offset: (totalPages - 1) * page.limit })}>»</button>
         </div>
       )}
 

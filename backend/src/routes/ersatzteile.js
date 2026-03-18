@@ -1,36 +1,55 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/database');
+const buildQuery = require('../utils/queryBuilder');
 
-// GET /api/ersatzteile?search=&maschinentyp_id=
+const ERSATZTEILE_FILTERS = {
+  artikelnr:      { type: 'ilike',        col: 'e.artikelnr::text' },
+  nur_baugruppen: { type: 'boolean_null', col: 'e.baugruppe_artikelnr' },
+};
+
+const ERSATZTEILE_SORTS = {
+  default:     'e.artikelnr',
+  artikelnr:   'e.artikelnr',
+  bezeichnung: 'e.bezeichnung',
+  baugruppe:   'e.baugruppe_artikelnr',
+};
+
+// GET /api/ersatzteile
 router.get('/', async (req, res) => {
   try {
-    const { search, maschinentyp_id } = req.query;
-    const conditions = [];
-    const params = [];
+    const { conditions, params, orderBy, limit, offset } = buildQuery(req.query, ERSATZTEILE_FILTERS, ERSATZTEILE_SORTS, { defaultDir: 'asc' });
 
-    if (search) {
-      params.push(`%${search}%`);
-      conditions.push(
-        `(e.bezeichnung ILIKE $${params.length} OR e.zusätzliche_bezeichnungen ILIKE $${params.length} OR e.artikelnr ILIKE $${params.length})`
-      );
+    // search on bezeichnung OR zusätzliche_bezeichnungen
+    if (req.query.search) {
+      params.push(`%${req.query.search}%`);
+      const p = params.length;
+      conditions.push(`(e.bezeichnung ILIKE $${p} OR e.zusätzliche_bezeichnungen ILIKE $${p})`);
     }
 
-    if (maschinentyp_id) {
-      params.push(maschinentyp_id);
+    // maschinentyp_id compatibility filter
+    if (req.query.maschinentyp_id) {
+      params.push(req.query.maschinentyp_id);
+      const p = params.length;
       conditions.push(
         `EXISTS (
           SELECT 1 FROM ersatzteile_maschinentyp_baujahr emb
-          WHERE emb.artikelnr = e.artikelnr AND emb.maschinentyp_id = $${params.length}
+          WHERE emb.artikelnr = e.artikelnr AND emb.maschinentyp_id = $${p}
           UNION
           SELECT 1 FROM ersatzteile_maschinentyp_nummer emn
-          WHERE emn.artikelnr = e.artikelnr AND emn.maschinentyp_id = $${params.length}
+          WHERE emn.artikelnr = e.artikelnr AND emn.maschinentyp_id = $${p}
         )`
       );
     }
 
     const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
 
+    const countResult = await pool.query(
+      `SELECT COUNT(*)::int AS total FROM ersatzteile e ${where}`,
+      params
+    );
+
+    const dataParams = [...params, limit, offset];
     const result = await pool.query(`
       SELECT
         e.artikelnr,
@@ -54,10 +73,11 @@ router.get('/', async (req, res) => {
       FROM ersatzteile e
       LEFT JOIN ersatzteile baugruppe ON e.baugruppe_artikelnr = baugruppe.artikelnr
       ${where}
-      ORDER BY e.bezeichnung
-    `, params);
+      ORDER BY ${orderBy}
+      LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}
+    `, dataParams);
 
-    res.json(result.rows);
+    res.json({ data: result.rows, total: countResult.rows[0].total });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -231,6 +251,40 @@ router.put('/:id/custom-fields', async (req, res) => {
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
+  }
+});
+
+// GET /api/ersatzteile/:id/kompatibilitaet-baujahr
+router.get('/:id/kompatibilitaet-baujahr', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT emb.maschinentyp_id, mt.maschinentyp_name, emb.baujahr_von, emb.baujahr_bis, emb.bemerkung_baujahr
+       FROM ersatzteile_maschinentyp_baujahr emb
+       JOIN maschinentyp mt ON emb.maschinentyp_id = mt.maschinentyp_id
+       WHERE emb.artikelnr = $1
+       ORDER BY mt.maschinentyp_name, emb.baujahr_von`,
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/ersatzteile/:id/kompatibilitaet-nummer
+router.get('/:id/kompatibilitaet-nummer', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT emn.maschinentyp_id, mt.maschinentyp_name, emn.maschinennummer_von, emn.maschinennummer_bis, emn.bemerkung_nummer
+       FROM ersatzteile_maschinentyp_nummer emn
+       JOIN maschinentyp mt ON emn.maschinentyp_id = mt.maschinentyp_id
+       WHERE emn.artikelnr = $1
+       ORDER BY mt.maschinentyp_name, emn.maschinennummer_von`,
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
