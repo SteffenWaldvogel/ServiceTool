@@ -168,7 +168,7 @@ router.get('/dashboard-stats', async (req, res) => {
       `)
     ]);
 
-    // Ungematchte Emails
+    // Ungematchte Emails (parallel, separate try/catch da Tabelle optional)
     let unmatchedCount = 0;
     try {
       const unmatchedResult = await pool.query('SELECT COUNT(*)::int AS cnt FROM unmatched_emails');

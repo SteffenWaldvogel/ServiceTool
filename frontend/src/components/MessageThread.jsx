@@ -6,7 +6,7 @@ function formatDate(dt) {
   return d.toLocaleDateString('de-DE') + ' ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 }
 
-export default function MessageThread({ messages = [], onMoveMessage }) {
+const MessageThread = React.memo(function MessageThread({ messages = [], onMoveMessage }) {
   if (messages.length === 0) {
     return (
       <div className="empty-state" style={{ padding: '24px 0' }}>
@@ -90,4 +90,6 @@ export default function MessageThread({ messages = [], onMoveMessage }) {
       })}
     </div>
   );
-}
+});
+
+export default MessageThread;

@@ -1,7 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
-export default function FilterBar({ filterConfig = [], filters = {}, onFilterChange, onClear, activeCount = 0 }) {
+function FilterBar({ filterConfig = [], filters = {}, onFilterChange, onClear, activeCount = 0 }) {
   const [expanded, setExpanded] = useState(false);
+  const [localValues, setLocalValues] = useState({});
+
+  useEffect(() => {
+    const timers = {};
+    Object.entries(localValues).forEach(([key, val]) => {
+      timers[key] = setTimeout(() => onFilterChange(key, val), 300);
+    });
+    return () => Object.values(timers).forEach(clearTimeout);
+  }, [localValues, onFilterChange]);
 
   const primaryFilters = filterConfig.filter(f => !f.advanced);
   const advancedFilters = filterConfig.filter(f => f.advanced);
@@ -9,7 +18,7 @@ export default function FilterBar({ filterConfig = [], filters = {}, onFilterCha
   return (
     <div style={{ marginBottom: 16 }}>
       <div className="filter-bar" style={{ flexWrap: 'wrap', gap: 8 }}>
-        {primaryFilters.map(f => renderFilter(f, filters, onFilterChange))}
+        {primaryFilters.map(f => renderFilter(f, filters, onFilterChange, localValues, setLocalValues))}
         {advancedFilters.length > 0 && (
           <button className="btn btn-ghost btn-sm" onClick={() => setExpanded(e => !e)}>
             {expanded ? 'Weniger ▲' : `Mehr Filter ${activeCount > 0 ? `(${activeCount})` : ''} ▼`}
@@ -23,7 +32,7 @@ export default function FilterBar({ filterConfig = [], filters = {}, onFilterCha
       </div>
       {expanded && advancedFilters.length > 0 && (
         <div className="filter-bar" style={{ marginTop: 8, flexWrap: 'wrap', gap: 8 }}>
-          {advancedFilters.map(f => renderFilter(f, filters, onFilterChange))}
+          {advancedFilters.map(f => renderFilter(f, filters, onFilterChange, localValues, setLocalValues))}
         </div>
       )}
       {/* Active filter chips */}
@@ -48,13 +57,13 @@ export default function FilterBar({ filterConfig = [], filters = {}, onFilterCha
   );
 }
 
-function renderFilter(f, filters, onChange) {
+function renderFilter(f, filters, onChange, localValues, setLocalValues) {
   if (f.type === 'search') {
     return (
       <input key={f.key} className="form-control" style={{ flex: 2, minWidth: 160 }}
         placeholder={f.placeholder || f.label}
-        value={filters[f.key] || ''}
-        onChange={e => onChange(f.key, e.target.value)} />
+        value={localValues[f.key] ?? filters[f.key] ?? ''}
+        onChange={e => setLocalValues(v => ({ ...v, [f.key]: e.target.value || '' }))} />
     );
   }
   if (f.type === 'select') {
@@ -83,8 +92,8 @@ function renderFilter(f, filters, onChange) {
         className="form-control"
         style={{ width: 100 }}
         placeholder={f.placeholder}
-        value={filters[f.key] || ''}
-        onChange={e => onChange(f.key, e.target.value || '')}
+        value={localValues[f.key] ?? filters[f.key] ?? ''}
+        onChange={e => setLocalValues(v => ({ ...v, [f.key]: e.target.value || '' }))}
       />
     );
   }
@@ -102,3 +111,5 @@ function renderFilter(f, filters, onChange) {
   }
   return null;
 }
+
+export default React.memo(FilterBar);

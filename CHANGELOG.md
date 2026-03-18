@@ -8,6 +8,25 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [UNRELEASED]
 
+### Added (Session 6)
+- Lokale Fonts: @fontsource/ibm-plex-sans + ibm-plex-mono (offline-fähig)
+- DB-Indizes für ticket, ticket_messages, ansprechpartner (Migration 004)
+- users-Tabelle + user_sessions (Migration 005)
+- Authentifizierung: express-session + bcryptjs (Login/Logout/Me/Change-Password)
+- Auth-Middleware: requireAuth + requireAdmin
+- Geschützte Routen: alle /api/* außer /api/auth
+- Admin-only: /api/stammdaten, /api/system, /api/custom-fields, /api/users
+- LoginPage mit Show/Hide Passwort
+- AuthContext (React Context für user + login + logout)
+- App.jsx: Auth-Guard (LoginPage wenn nicht eingeloggt)
+- Sidebar: User-Footer mit Logout + Passwort-ändern Button
+- Sidebar: Stammdaten/System/Benutzer nur für Admin sichtbar
+- BenutzerPage: Admin-CRUD für Benutzer
+- Teil A: Polling-Backoff (60s→300s bei Fehler, pausiert wenn Tab versteckt)
+- Teil A: FilterBar Debouncing 300ms für Text/Zahl-Inputs
+- Teil A: React.memo für FilterBar, SortableHeader, MessageThread
+- Teil A: dashboard-stats Queries parallel (Promise.all)
+
 ### Added (Session 5)
 - emailService.js: Schema-Fix (ticketnr statt id, Fehlspalten entfernt)
 - emailService.js: addMessageToTicket() vollständig implementiert

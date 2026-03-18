@@ -1,9 +1,16 @@
 const BASE = '/api';
 
 async function request(path, options = {}) {
+  const { body, ...restOptions } = options;
+  // Accept both pre-stringified body and raw objects
+  const serializedBody = body
+    ? (typeof body === 'string' ? body : JSON.stringify(body))
+    : undefined;
   const res = await fetch(`${BASE}${path}`, {
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...options.headers },
-    ...options
+    ...restOptions,
+    body: serializedBody,
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -13,6 +20,18 @@ async function request(path, options = {}) {
 }
 
 export const api = {
+  // ── Auth ─────────────────────────────────────────────────────────────────
+  login: (username, password) => request('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
+  logout: () => request('/auth/logout', { method: 'POST' }),
+  getMe: () => request('/auth/me'),
+  changePassword: (data) => request('/auth/change-password', { method: 'POST', body: JSON.stringify(data) }),
+
+  // ── Benutzer (Admin) ──────────────────────────────────────────────────────
+  getUsers: () => request('/users'),
+  createUser: (data) => request('/users', { method: 'POST', body: JSON.stringify(data) }),
+  updateUser: (id, data) => request(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteUser: (id) => request(`/users/${id}`, { method: 'DELETE' }),
+
   // ── Tickets ──────────────────────────────────────────────────────────────
   getTickets: (params = {}) => {
     const q = new URLSearchParams(params).toString();

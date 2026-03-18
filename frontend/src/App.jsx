@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import { api } from './utils/api';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import LoginPage from './pages/LoginPage';
+import BenutzerPage, { ChangePasswordModal } from './pages/BenutzerPage';
 import Dashboard from './pages/Dashboard';
 import TicketList from './pages/TicketList';
 import TicketDetail from './pages/TicketDetail';
@@ -30,21 +33,42 @@ const icons = {
   maschinen: <path fillRule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2h-2.22l.123.489.804.804A1 1 0 0113 18H7a1 1 0 01-.707-1.707l.804-.804L7.22 15H5a2 2 0 01-2-2V5zm5.771 7H5V5h10v7H8.771z" clipRule="evenodd" />,
   stammdaten: <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />,
   system: <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />,
+  benutzer: <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />,
 };
 
-export default function App() {
+function AppContent() {
+  const { user, loading, logout } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
   const [unmatchedCount, setUnmatchedCount] = useState(0);
+  const [showChangePw, setShowChangePw] = useState(false);
 
   useEffect(() => {
-    const load = () => api.getStats().then(s => {
-      setUnreadCount(s.unread_messages || 0);
-      setUnmatchedCount(s.unmatched_emails || 0);
-    }).catch(() => {});
-    load();
-    const timer = setInterval(load, 60000);
-    return () => clearInterval(timer);
+    let interval = 60000;
+    let timer;
+    const load = () => {
+      if (document.visibilityState !== 'visible') {
+        timer = setTimeout(load, interval);
+        return;
+      }
+      api.getStats()
+        .then(s => {
+          setUnreadCount(s.unread_messages || 0);
+          setUnmatchedCount(s.unmatched_emails || 0);
+          interval = 60000;
+        })
+        .catch(() => {
+          interval = Math.min(interval * 2, 300000);
+        })
+        .finally(() => {
+          timer = setTimeout(load, interval);
+        });
+    };
+    timer = setTimeout(load, 1000);
+    return () => clearTimeout(timer);
   }, []);
+
+  if (loading) return <div className="loading"><div className="spinner" /></div>;
+  if (!user) return <LoginPage />;
 
   return (
     <BrowserRouter>
@@ -87,16 +111,42 @@ export default function App() {
             </NavLink>
 
             <div className="nav-section">Verwaltung</div>
-            <NavLink to="/stammdaten" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
-              <NavIcon path={icons.stammdaten} />
-              Stammdaten
-            </NavLink>
-            <NavLink to="/system" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
-              <NavIcon path={icons.system} />
-              System
-              {unmatchedCount > 0 && <span className="nav-badge nav-badge-warn">{unmatchedCount}</span>}
-            </NavLink>
+            {user?.role === 'admin' && (
+              <NavLink to="/stammdaten" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
+                <NavIcon path={icons.stammdaten} />
+                Stammdaten
+              </NavLink>
+            )}
+            {user?.role === 'admin' && (
+              <NavLink to="/system" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
+                <NavIcon path={icons.system} />
+                System
+                {unmatchedCount > 0 && <span className="nav-badge nav-badge-warn">{unmatchedCount}</span>}
+              </NavLink>
+            )}
+            {user?.role === 'admin' && (
+              <NavLink to="/benutzer" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
+                <NavIcon path={icons.benutzer} />
+                Benutzer
+              </NavLink>
+            )}
           </nav>
+
+          <div style={{
+            padding: '12px 16px', borderTop: '1px solid var(--border)',
+            marginTop: 'auto', display: 'flex', alignItems: 'center', gap: 8
+          }}>
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {user.display_name || user.username}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono, "IBM Plex Mono", monospace)' }}>
+                {user.role}
+              </div>
+            </div>
+            <button className="btn btn-ghost btn-sm btn-icon" title="Passwort ändern" onClick={() => setShowChangePw(true)}>🔑</button>
+            <button className="btn btn-ghost btn-sm btn-icon" title="Ausloggen" onClick={logout}>⏻</button>
+          </div>
         </aside>
 
         <main className="main-content">
@@ -113,11 +163,17 @@ export default function App() {
             <Route path="/ersatzteile/:id" element={<ErsatzteileDetail />} />
             <Route path="/ansprechpartner" element={<AnsprechpartnerList />} />
             <Route path="/ansprechpartner/:id" element={<AnsprechpartnerDetail />} />
-            <Route path="/stammdaten" element={<StammdatenPage />} />
-            <Route path="/system" element={<SystemPage />} />
+            {user?.role === 'admin' && <Route path="/stammdaten" element={<StammdatenPage />} />}
+            {user?.role === 'admin' && <Route path="/system" element={<SystemPage />} />}
+            {user?.role === 'admin' && <Route path="/benutzer" element={<BenutzerPage />} />}
           </Routes>
         </main>
       </div>
+      {showChangePw && <ChangePasswordModal onClose={() => setShowChangePw(false)} />}
     </BrowserRouter>
   );
+}
+
+export default function App() {
+  return <AuthProvider><AppContent /></AuthProvider>;
 }

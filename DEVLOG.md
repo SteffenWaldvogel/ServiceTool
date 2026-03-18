@@ -4,6 +4,30 @@ Chronological log of development sessions for the Service Tool project.
 
 ---
 
+## Session 6 – 2026-03-18
+**Ziel:** Performance-Optimierung + Basis-Authentifizierung + Lokale Fonts
+**Scope:** CPU-Fixes, Debouncing, React.memo, Login/Rollen, @fontsource
+
+### Tasks
+- ✅ Lokale Fonts: @fontsource/ibm-plex-sans + ibm-plex-mono
+- ✅ DB-Indizes Migration 004
+- ✅ Users-Tabelle Migration 005
+- ✅ Backend: bcryptjs + express-session + connect-pg-simple installieren
+- ✅ Auth-Routen (login/logout/me/change-password)
+- ✅ Auth-Middleware (requireAuth/requireAdmin)
+- ✅ server.js: Session + Auth absichern
+- ✅ users.js: Admin-CRUD
+- ✅ dashboard-stats: Promise.all
+- ✅ FilterBar: Debouncing 300ms
+- ✅ App.jsx: Polling-Backoff
+- ✅ React.memo: SortableHeader, FilterBar, MessageThread
+- ✅ AuthContext + LoginPage
+- ✅ App.jsx: Auth-Guard + Sidebar User-Footer
+- ✅ BenutzerPage.jsx
+- ✅ api.js: Auth + User Methoden
+
+---
+
 ## Session 5 – 2026-03-18
 **Ziel:** Ticket-Kommunikation: Email-Thread, Matching, manuelle Verknüpfung
 **Scope:** emailService Fix, ticket_messages CRUD, Thread-UI, Reply, Email-Matching, manuelle Verknüpfung
