@@ -185,6 +185,18 @@ Dark industrial theme using CSS custom properties in `global.css`.
 Colors: bg `#0d1117`, surface `#161b22`, accent `#3b82f6`.
 No external UI library – all components hand-written.
 
+## Security Conventions
+
+- **SQL**: Alle Queries müssen parameterisiert sein (`pg` `$1, $2, ...`). Keine String-Konkatenation mit User-Input in SQL.
+- **Passwörter**: Immer bcryptjs cost 12. Kein Plaintext speichern oder zurückgeben.
+- **SESSION_SECRET**: Muss in `.env` gesetzt sein. Server startet nicht ohne es (exit 1).
+- **Rate-Limiting**: Login max 10/15min (`skipSuccessfulRequests: true`), global API max 500/15min.
+- **Input-Validierung**: Alle POST/PUT-Routen nutzen `express-validator` + zentrale `validate`-Middleware.
+- **Timing-Attack-Schutz**: Bei unbekanntem User beim Login trotzdem `bcrypt.compare` auf Dummy-Hash ausführen.
+- **HTTP-Header**: `helmet` ist aktiv (X-Frame-Options, X-Content-Type-Options, HSTS, etc.).
+- **Fehler-Responses**: In Production (`NODE_ENV=production`) keine Stack-Traces zurückgeben.
+- **CORS**: Origin kommt aus `CORS_ORIGIN` Env-Var, nicht hardkodiert.
+
 ## Git Workflow
 
 ### Branch Strategy

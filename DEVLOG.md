@@ -4,6 +4,32 @@ Chronological log of development sessions for the Service Tool project.
 
 ---
 
+## Session 8 – 2026-03-18
+**Ziel:** Produktionssicherheit & Hardening
+**Scope:** Helmet, Rate-Limiting, Input-Validierung, Timing-Attack-Schutz, SQL-Audit, Env-Härtung
+
+### Tasks
+- ✅ Pakete installiert: helmet, express-rate-limit, express-validator
+- ✅ SESSION_SECRET generiert (64 Zeichen) + in .env geschrieben
+- ✅ CORS_ORIGIN + NODE_ENV in .env + .env.example
+- ✅ server.js: Startup-Validierung (exit 1 wenn SESSION_SECRET/DB_PASSWORD fehlt)
+- ✅ server.js: Helmet (HTTP Security Headers, CSP disabled)
+- ✅ server.js: CORS aus .env
+- ✅ server.js: Payload-Limit 1MB
+- ✅ server.js: Globales Rate-Limit 500/15min
+- ✅ server.js: Session-Cookie sameSite + secure in Production
+- ✅ server.js: Error-Handler ohne Stack-Trace in Production
+- ✅ middleware/validate.js erstellt (zentraler validationResult-Check)
+- ✅ routes/auth.js: Login Rate-Limit 10/15min + Input-Validierung + Timing-Attack-Schutz
+- ✅ routes/users.js: Input-Validierung mit express-validator
+- ✅ middleware/auth.js: Session-Vollständigkeitsprüfung (user_id + username)
+- ✅ config/database.js: connectionTimeoutMillis 5000ms
+- ✅ .gitignore: prompt.txt hinzugefügt
+- ✅ SQL-Injection-Audit: alle Routes geprüft, queryBuilder sicher (Whitelist-Sorting)
+- ✅ CLAUDE.md: Security-Konventionen dokumentiert
+
+---
+
 ## Session 7 – 2026-03-18
 **Ziel:** Granulare Benutzer- & Rechteverwaltung (RBAC)
 **Scope:** Migration 006, roles/permissions/role_permissions, requirePermission, UI Rollen-Tab

@@ -3,7 +3,18 @@ const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const pool = require('./config/database');
+
+// Startup-Validierung: kritische Env-Vars prüfen
+const required = ['DB_PASSWORD', 'SESSION_SECRET'];
+required.forEach(key => {
+  if (!process.env[key]) {
+    console.error(`FATAL: Umgebungsvariable ${key} nicht gesetzt`);
+    process.exit(1);
+  }
+});
 
 const ticketsRouter = require('./routes/tickets');
 const kundenRouter = require('./routes/kunden');
@@ -23,23 +34,43 @@ const { startEmailPolling } = require('./services/emailService');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// HTTP Security Headers
+app.use(helmet({
+  contentSecurityPolicy: false, // Frontend liegt nicht hier
+}));
+
+// CORS aus .env
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   credentials: true
 }));
-app.use(express.json());
+
+// Payload-Limit
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 app.use(session({
   store: new pgSession({ pool, tableName: 'user_sessions' }),
-  secret: process.env.SESSION_SECRET || 'servicetool-dev-secret-change-in-prod',
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: false,
+    secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
+    sameSite: 'lax',
     maxAge: 8 * 60 * 60 * 1000
   }
 }));
+
+// Globales Rate-Limit für alle API-Routen
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Zu viele Anfragen, bitte später erneut versuchen' }
+});
+app.use('/api', globalLimiter);
 
 // Public routes (no auth required)
 app.use('/api/auth', authRouter);
@@ -63,10 +94,13 @@ app.use('/api/custom-fields', requireAdmin, customFieldsAdminRouter);
 app.use('/api/ansprechpartner', ansprechpartnerRouter);
 app.use('/api/users', requireAdmin, usersRouter);
 
-// Global error handler
+// Error Handler – keine Stack-Traces in Produktion
 app.use((err, req, res, next) => {
   console.error(err);
-  res.status(500).json({ error: 'Interner Serverfehler' });
+  const isProd = process.env.NODE_ENV === 'production';
+  res.status(500).json({
+    error: isProd ? 'Interner Serverfehler' : err.message
+  });
 });
 
 app.listen(PORT, () => {

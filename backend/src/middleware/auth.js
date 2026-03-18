@@ -1,23 +1,25 @@
 function requireAuth(req, res, next) {
-  if (!req.session?.user) {
+  const u = req.session?.user;
+  if (!u || !u.user_id || !u.username)
     return res.status(401).json({ error: 'Nicht eingeloggt' });
-  }
   next();
 }
 
 function requireAdmin(req, res, next) {
-  if (!req.session?.user) return res.status(401).json({ error: 'Nicht eingeloggt' });
-  if (req.session.user.role !== 'admin')
+  const u = req.session?.user;
+  if (!u || !u.user_id || !u.username) return res.status(401).json({ error: 'Nicht eingeloggt' });
+  if (u.role !== 'admin')
     return res.status(403).json({ error: 'Keine Berechtigung (Admin erforderlich)' });
   next();
 }
 
 function requirePermission(permName) {
   return (req, res, next) => {
-    if (!req.session?.user) return res.status(401).json({ error: 'Nicht eingeloggt' });
+    const u = req.session?.user;
+    if (!u || !u.user_id || !u.username) return res.status(401).json({ error: 'Nicht eingeloggt' });
     // admin hat immer alle Rechte
-    if (req.session.user.role === 'admin') return next();
-    if (!req.session.user.permissions?.includes(permName))
+    if (u.role === 'admin') return next();
+    if (!u.permissions?.includes(permName))
       return res.status(403).json({ error: `Keine Berechtigung (${permName})` });
     next();
   };

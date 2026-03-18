@@ -8,6 +8,22 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [UNRELEASED]
 
+### Added (Session 8)
+- Helmet: HTTP-Security-Header (X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-Policy, etc.)
+- express-rate-limit: Login max 10/15min (skipSuccessfulRequests), global API max 500/15min
+- express-validator: Input-Validierung für Login und Users-Routes
+- Zentrale validate-Middleware (`middleware/validate.js`)
+- Timing-Attack-Schutz beim Login: Dummy-bcrypt.compare wenn User nicht gefunden
+- SESSION_SECRET Pflichtprüfung beim Serverstart (exit 1 wenn nicht gesetzt)
+- CORS_ORIGIN aus .env statt hardkodiert
+- Payload-Limit 1MB (JSON + URL-encoded)
+- Session-Cookie: sameSite lax, secure in Production
+- Error-Handler: kein Stack-Trace in Production
+- DB-Pool: connectionTimeoutMillis auf 5000ms erhöht
+- .gitignore: prompt.txt ausgeschlossen
+- SQL-Injection-Audit: Alle Routes geprüft, keine Schwachstellen gefunden
+- CLAUDE.md: Security-Konventionen dokumentiert
+
 ### Added (Session 7)
 - RBAC: Tabellen roles, permissions, role_permissions (Migration 006)
 - 3 System-Rollen: admin (25 Rechte), techniker (15 Rechte), readonly (6 Rechte)

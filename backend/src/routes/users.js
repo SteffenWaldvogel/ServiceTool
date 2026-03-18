@@ -1,7 +1,23 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
+const { body } = require('express-validator');
 const pool = require('../config/database');
+const validate = require('../middleware/validate');
+
+const userCreateRules = [
+  body('username').trim().matches(/^[a-zA-Z0-9_]+$/).isLength({ min: 3, max: 50 }),
+  body('display_name').optional().trim().isLength({ max: 100 }),
+  body('password').isLength({ min: 8, max: 200 }),
+  body('role_id').optional().isInt({ min: 1 }),
+];
+
+const userUpdateRules = [
+  body('display_name').optional().trim().isLength({ max: 100 }),
+  body('password').optional().isLength({ min: 8, max: 200 }),
+  body('role_id').optional().isInt({ min: 1 }),
+  body('is_active').optional().isBoolean(),
+];
 
 // GET /api/users
 router.get('/', async (req, res) => {
@@ -19,10 +35,8 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/users
-router.post('/', async (req, res) => {
+router.post('/', userCreateRules, validate, async (req, res) => {
   const { username, password, display_name, role_id = 2 } = req.body;
-  if (!username || !password) return res.status(400).json({ error: 'username und password erforderlich' });
-  if (password.length < 8) return res.status(400).json({ error: 'Passwort muss mindestens 8 Zeichen haben' });
   try {
     const hash = await bcrypt.hash(password, 12);
     const result = await pool.query(`
@@ -38,7 +52,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/users/:id
-router.put('/:id', async (req, res) => {
+router.put('/:id', userUpdateRules, validate, async (req, res) => {
   const { display_name, role_id, is_active, password } = req.body;
   try {
     let query, params;
