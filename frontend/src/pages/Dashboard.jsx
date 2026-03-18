@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { api } from '../utils/api';
+import { useAuth } from '../context/AuthContext';
 
 function StatTile({ label, value, color }) {
   return (
@@ -22,7 +23,9 @@ function getStatusColor(entry, index) {
 }
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const [data, setData] = useState(null);
+  const [myOpenCount, setMyOpenCount] = useState(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -32,6 +35,13 @@ export default function Dashboard() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!user?.user_id) return;
+    api.getTickets({ assigned_to: user.user_id, is_terminal: false, limit: 1, offset: 0 })
+      .then(result => setMyOpenCount(Array.isArray(result) ? result.length : (result.total ?? 0)))
+      .catch(() => setMyOpenCount(0));
+  }, [user]);
 
   if (loading) return <div className="loading"><div className="spinner" /> Lade Dashboard…</div>;
   if (!data) return <div className="page"><div className="error-banner">Fehler beim Laden der Daten</div></div>;
@@ -53,6 +63,7 @@ export default function Dashboard() {
         <StatTile label="Warten auf Kunde" value={stats.warten} color="#8b5cf6" />
         <StatTile label="Heute erstellt" value={stats.heute_erstellt} color="#10b981" />
         <StatTile label="Heute geschlossen" value={stats.heute_geschlossen} color="#6b7280" />
+        <StatTile label="Meine offenen Tickets" value={myOpenCount} color="#06b6d4" />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 28 }}>

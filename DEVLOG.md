@@ -4,6 +4,21 @@ Chronological log of development sessions for the Service Tool project.
 
 ---
 
+## Session 9 – 2026-03-18
+**Ziel:** Ticket-Zuweisung an Techniker
+**Scope:** Migration 007, tickets.js, lookup.js, TicketDetail, TicketList, Dashboard
+
+### Tasks
+- ✅ Migration 007: assigned_to INTEGER REFERENCES users(user_id) ON DELETE SET NULL
+- ✅ tickets.js: TICKET_SELECT + JOIN users + assigned_to in FILTERS/SORTS/POST/PUT
+- ✅ lookup.js: GET /api/lookup/users (aktive User für Dropdown)
+- ✅ api.js: getLookupUsers()
+- ✅ TicketDetail.jsx: "Zugewiesen an" EditField (Dropdown + nullable) + Meta-Anzeige
+- ✅ TicketList.jsx: Spalte "Zugewiesen" + "Meine Tickets"-Toggle (filtered auf user_id)
+- ✅ Dashboard.jsx: "Meine offenen Tickets"-Tile via separatem API-Call
+
+---
+
 ## Session 8 – 2026-03-18
 **Ziel:** Produktionssicherheit & Hardening
 **Scope:** Helmet, Rate-Limiting, Input-Validierung, Timing-Attack-Schutz, SQL-Audit, Env-Härtung

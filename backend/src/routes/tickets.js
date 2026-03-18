@@ -15,6 +15,7 @@ const TICKET_FILTERS = {
   date_from:           { type: 'date_from', col: 't.erstellt_am' },
   date_to:             { type: 'date_to',   col: 't.erstellt_am' },
   is_terminal:         { type: 'boolean',   col: 's.is_terminal' },
+  assigned_to:         { type: 'exact',     col: 't.assigned_to' },
 };
 
 const TICKET_SORTS = {
@@ -25,6 +26,7 @@ const TICKET_SORTS = {
   kunde:         'k.name_kunde',
   ticketnr:      't.ticketnr',
   geaendert_am:  "t.\"geändert_am\"",
+  assigned:      'u.display_name',
 };
 
 // Shared SELECT base - first message as betreff via subquery
@@ -37,6 +39,7 @@ const TICKET_SELECT = `
     t.ticket_kundennummer,
     t.ticket_ansprechpartnerid,
     t.ticket_maschinenid,
+    t.assigned_to,
     t.erstellt_von,
     t.erstellt_am,
     t.geändert_von,
@@ -49,6 +52,9 @@ const TICKET_SELECT = `
     kr.kritikalität_name AS kritikalitaet_name,
     kr.kritikalität_gewichtung AS kritikalitaet_gewichtung,
     ka.kategorie_name,
+    u.user_id AS assigned_user_id,
+    u.username AS assigned_username,
+    COALESCE(u.display_name, u.username) AS assigned_display_name,
     m.maschinennr AS maschine_maschinennr,
     mt.maschinentyp_name AS maschine_typ,
     ap.ansprechpartner_name AS ap_name,
@@ -68,6 +74,7 @@ const TICKET_SELECT = `
   LEFT JOIN maschine m ON t.ticket_maschinenid = m.maschinenid
   LEFT JOIN maschinentyp mt ON m.maschinentyp_id = mt.maschinentyp_id
   LEFT JOIN ansprechpartner ap ON t.ticket_ansprechpartnerid = ap.ansprechpartnerid
+  LEFT JOIN users u ON t.assigned_to = u.user_id
 `;
 
 // GET /api/tickets/unmatched
@@ -180,6 +187,7 @@ router.post('/', async (req, res) => {
       betreff,
       beschreibung,
       erstellt_von,
+      assigned_to = null,
       from_email,
       from_name,
       send_confirmation = false
@@ -207,8 +215,8 @@ router.post('/', async (req, res) => {
     const ticketResult = await client.query(
       `INSERT INTO ticket
          (kategorie_id, kritikalität_id, status_id, ticket_kundennummer,
-          ticket_ansprechpartnerid, ticket_maschinenid, erstellt_von, erstellt_am)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
+          ticket_ansprechpartnerid, ticket_maschinenid, erstellt_von, assigned_to, erstellt_am)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
        RETURNING *`,
       [
         kategorie_id,
@@ -217,7 +225,8 @@ router.post('/', async (req, res) => {
         kundennummer,
         ticket_ansprechpartnerid || null,
         ticket_maschinenid || null,
-        erstellt_von || null
+        erstellt_von || null,
+        assigned_to || null
       ]
     );
     const ticket = ticketResult.rows[0];
@@ -285,6 +294,7 @@ router.put('/:id', async (req, res) => {
       ticket_maschinenid,
       erstellt_von,
       geändert_von,
+      assigned_to,
     } = req.body;
 
     // Accept both spellings of kritikalität_id
@@ -302,9 +312,10 @@ router.put('/:id', async (req, res) => {
          ticket_maschinenid=$6,
          erstellt_von=$7,
          geändert_von=$8,
+         assigned_to=$9,
          geändert_am=NOW(),
          updated_at=NOW()
-       WHERE ticketnr=$9
+       WHERE ticketnr=$10
        RETURNING *`,
       [
         kategorie_id || null,
@@ -315,6 +326,7 @@ router.put('/:id', async (req, res) => {
         ticket_maschinenid || null,
         erstellt_von || null,
         geändert_von || null,
+        assigned_to !== undefined ? (assigned_to || null) : null,
         req.params.id
       ]
     );

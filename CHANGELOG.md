@@ -8,6 +8,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [UNRELEASED]
 
+### Added (Session 9)
+- Ticket-Zuweisung: `assigned_to` FK auf `users` in `ticket`-Tabelle (Migration 007)
+- TicketList: neue Spalte "Zugewiesen", sortierbar
+- TicketList: Toggle-Button "Meine Tickets" filtert auf eigene user_id
+- TicketDetail: "Zugewiesen an" Dropdown in Ticket-Feldern + Anzeige in Meta-Sidebar
+- Dashboard: neues Tile "Meine offenen Tickets"
+- GET /api/lookup/users – alle aktiven User für Dropdown
+
 ### Added (Session 8)
 - Helmet: HTTP-Security-Header (X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-Policy, etc.)
 - express-rate-limit: Login max 10/15min (skipSuccessfulRequests), global API max 500/15min

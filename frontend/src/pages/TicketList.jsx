@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../utils/api';
 import { getKritColor, parseKategorie } from '../utils/helpers';
+import { useAuth } from '../context/AuthContext';
 import QuickCreate from '../components/QuickCreate';
 import FilterBar from '../components/FilterBar';
 import SortableHeader from '../components/SortableHeader';
@@ -263,10 +264,12 @@ function CreateTicketModal({ onClose, onCreated }) {
 }
 
 export default function TicketList() {
+  const { user } = useAuth();
   const [tickets, setTickets] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [myTickets, setMyTickets] = useState(false);
   const [filters, setFilters] = useState({ search: '', status_id: '', kritikalitaet_id: '', kategorie_id: '', is_terminal: '', date_from: '', date_to: '' });
   const [sort, setSort] = useState({ by: 'created_at', dir: 'desc' });
   const [page, setPage] = useState({ limit: 25, offset: 0 });
@@ -285,6 +288,7 @@ export default function TicketList() {
     if (filters.is_terminal) params.is_terminal = filters.is_terminal;
     if (filters.date_from) params.date_from = filters.date_from;
     if (filters.date_to) params.date_to = filters.date_to;
+    if (myTickets && user?.user_id) params.assigned_to = user.user_id;
     params.sort = sort.by;
     params.dir = sort.dir;
     params.limit = page.limit;
@@ -298,7 +302,7 @@ export default function TicketList() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [filters, sort, page]);
+  }, [filters, sort, page, myTickets, user]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -336,7 +340,15 @@ export default function TicketList() {
           <div className="page-title">Tickets</div>
           <div className="page-subtitle">Gesamt: {total} Tickets</div>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ Neues Ticket</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className={`btn btn-sm${myTickets ? ' btn-primary' : ' btn-secondary'}`}
+            onClick={() => { setMyTickets(v => !v); setPage(p => ({ ...p, offset: 0 })); }}
+          >
+            {myTickets ? '👤 Meine Tickets' : '👤 Meine Tickets'}
+          </button>
+          <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ Neues Ticket</button>
+        </div>
       </div>
 
       <FilterBar
@@ -365,6 +377,7 @@ export default function TicketList() {
                 <th>Kategorie</th>
                 <th><SortableHeader field="kritikalitaet" label="Kritikalität" sort={sort} onSort={handleSort} /></th>
                 <th><SortableHeader field="status" label="Status" sort={sort} onSort={handleSort} /></th>
+                <th><SortableHeader field="assigned" label="Zugewiesen" sort={sort} onSort={handleSort} /></th>
                 <th><SortableHeader field="created_at" label="Erstellt" sort={sort} onSort={handleSort} /></th>
               </tr>
             </thead>
@@ -410,6 +423,11 @@ export default function TicketList() {
                         {t.status_name}
                       </span>
                     ) : <span className="text-muted">–</span>}
+                  </td>
+                  <td style={{ fontSize: 12 }}>
+                    {t.assigned_display_name
+                      ? <span style={{ color: 'var(--text-secondary)' }}>{t.assigned_display_name}</span>
+                      : <span className="text-muted">–</span>}
                   </td>
                   <td className="text-muted" style={{ fontSize: 12 }}>
                     {new Date(t.erstellt_am).toLocaleDateString('de-DE')}

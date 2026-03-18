@@ -129,7 +129,7 @@ export default function TicketDetail() {
   const [ticket, setTicket] = useState(null);
   const [kunde, setKunde] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [lookup, setLookup] = useState({ status: [], kategorien: [], kritikalitaeten: [], kunden: [] });
+  const [lookup, setLookup] = useState({ status: [], kategorien: [], kritikalitaeten: [], kunden: [], users: [] });
   const [maschinen, setMaschinen] = useState([]);
   const [kundenAP, setKundenAP] = useState([]);
   const [delConfirm, setDelConfirm] = useState(false);
@@ -154,10 +154,11 @@ export default function TicketDetail() {
       api.getKategorien(),
       api.getKritikalitaeten(),
       api.getKunden(),
-      api.getMaschinen()
-    ]).then(([t, status, kategorien, kritikalitaeten, kunden, mlist]) => {
+      api.getMaschinen(),
+      api.getLookupUsers()
+    ]).then(([t, status, kategorien, kritikalitaeten, kunden, mlist, users]) => {
       setTicket(t);
-      setLookup({ status, kategorien, kritikalitaeten, kunden });
+      setLookup({ status, kategorien, kritikalitaeten, kunden, users });
       setMaschinen(mlist);
       if (t.ticket_kundennummer) {
         api.getKunde(t.ticket_kundennummer)
@@ -217,6 +218,7 @@ export default function TicketDetail() {
   const kundenOptions = lookup.kunden.map(k => ({ id: k.kundennummer, name: k.name_kunde }));
   const maschinenOptions = maschinen.map(m => ({ id: m.maschinenid, name: `${m.maschinennr}${m.maschinentyp_name ? ` (${m.maschinentyp_name})` : ''}` }));
   const apOptions = kundenAP.map(ap => ({ id: ap.ansprechpartnerid, name: `${ap.ansprechpartner_name}${ap.position_name ? ` – ${ap.position_name}` : ''}` }));
+  const userOptions = lookup.users.map(u => ({ id: u.user_id, name: u.display_name }));
 
   return (
     <div className="page">
@@ -321,6 +323,15 @@ export default function TicketDetail() {
               nullable
               onSave={(v) => update('ticket_ansprechpartnerid', v || null)}
             />
+            <EditField
+              label="Zugewiesen an"
+              value={ticket.assigned_display_name}
+              editValue={ticket.assigned_to}
+              type="select"
+              options={userOptions}
+              nullable
+              onSave={(v) => update('assigned_to', v || null)}
+            />
             <EditField label="Erstellt von" value={ticket.erstellt_von} type="text"
               onSave={(v) => update('erstellt_von', v)} />
             <EditField label="Geändert von" value={ticket.geändert_von} type="text"
@@ -423,6 +434,10 @@ export default function TicketDetail() {
                 </div>
               </div>
             )}
+            <div className="field-row">
+              <div className="field-key">Zugewiesen</div>
+              <div className="field-val">{ticket.assigned_display_name || <span className="text-muted">–</span>}</div>
+            </div>
             <div className="field-row">
               <div className="field-key">Aktualisiert</div>
               <div className="field-val text-muted">{new Date(ticket.updated_at || ticket.created_at).toLocaleString('de-DE')}</div>

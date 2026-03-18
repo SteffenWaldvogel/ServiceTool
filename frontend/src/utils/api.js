@@ -108,6 +108,7 @@ export const api = {
     return request(`/lookup/positionen${q}`);
   },
   getDashboardStats: () => request('/lookup/dashboard-stats'),
+  getLookupUsers: () => request('/lookup/users'),
   getCustomFieldDefs: (tableName) => request(`/lookup/custom-fields/${tableName}`),
 
   // ── Custom Fields ─────────────────────────────────────────────────────────

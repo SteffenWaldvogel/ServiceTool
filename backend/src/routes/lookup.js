@@ -188,6 +188,21 @@ router.get('/dashboard-stats', async (req, res) => {
   }
 });
 
+// GET /api/lookup/users
+router.get('/users', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT user_id, username, COALESCE(display_name, username) AS display_name
+       FROM users
+       WHERE is_active = true
+       ORDER BY display_name, username`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/lookup/custom-fields/:tableName
 router.get('/custom-fields/:tableName', async (req, res) => {
   try {
