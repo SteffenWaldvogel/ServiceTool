@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
+import { api } from './utils/api';
 import Dashboard from './pages/Dashboard';
 import TicketList from './pages/TicketList';
 import TicketDetail from './pages/TicketDetail';
@@ -32,6 +33,19 @@ const icons = {
 };
 
 export default function App() {
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [unmatchedCount, setUnmatchedCount] = useState(0);
+
+  useEffect(() => {
+    const load = () => api.getStats().then(s => {
+      setUnreadCount(s.unread_messages || 0);
+      setUnmatchedCount(s.unmatched_emails || 0);
+    }).catch(() => {});
+    load();
+    const timer = setInterval(load, 60000);
+    return () => clearInterval(timer);
+  }, []);
+
   return (
     <BrowserRouter>
       <div className="layout">
@@ -51,6 +65,7 @@ export default function App() {
             <NavLink to="/tickets" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
               <NavIcon path={icons.tickets} />
               Tickets
+              {unreadCount > 0 && <span className="nav-badge">{unreadCount}</span>}
             </NavLink>
 
             <div className="nav-section">Stamm</div>
@@ -79,6 +94,7 @@ export default function App() {
             <NavLink to="/system" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
               <NavIcon path={icons.system} />
               System
+              {unmatchedCount > 0 && <span className="nav-badge nav-badge-warn">{unmatchedCount}</span>}
             </NavLink>
           </nav>
         </aside>

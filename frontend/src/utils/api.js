@@ -28,6 +28,21 @@ export const api = {
   addTicketMessage: (ticketnr, data) =>
     request(`/tickets/${ticketnr}/messages`, { method: 'POST', body: JSON.stringify(data) }),
 
+  // Aliases used by new components
+  getMessages: (ticketnr) => request(`/tickets/${ticketnr}/messages`),
+  addMessage: (ticketnr, data) =>
+    request(`/tickets/${ticketnr}/messages`, { method: 'POST', body: JSON.stringify(data) }),
+  sendReply: (ticketnr, data) =>
+    request(`/tickets/${ticketnr}/reply`, { method: 'POST', body: JSON.stringify(data) }),
+  linkMessage: (ticketnr, messageId) =>
+    request(`/tickets/${ticketnr}/link-message`, { method: 'POST', body: JSON.stringify({ message_id: messageId }) }),
+  getUnmatchedEmails: () => request('/tickets/unmatched'),
+  assignUnmatchedEmail: (unmatchedId, ticketnr) =>
+    request(`/tickets/unmatched/${unmatchedId}/assign`, { method: 'POST', body: JSON.stringify({ ticketnr }) }),
+
+  // Dashboard stats alias
+  getStats: () => request('/lookup/dashboard-stats'),
+
   // ── Kunden ───────────────────────────────────────────────────────────────
   getKunden: (params = {}) => {
     const q = new URLSearchParams(params).toString();

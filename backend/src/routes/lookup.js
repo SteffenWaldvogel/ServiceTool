@@ -101,7 +101,7 @@ router.get('/positionen', async (req, res) => {
 // GET /api/lookup/dashboard-stats
 router.get('/dashboard-stats', async (req, res) => {
   try {
-    const [ticketStats, statusDist, recentTickets, kritikalitaetDist] = await Promise.all([
+    const [ticketStats, statusDist, recentTickets, kritikalitaetDist, unreadResult] = await Promise.all([
       pool.query(`
         SELECT
           COUNT(*) FILTER (WHERE s.is_terminal = false) AS offen,
@@ -152,14 +152,36 @@ router.get('/dashboard-stats', async (req, res) => {
           AND t.status_id IN (SELECT status_id FROM status WHERE is_terminal = false)
         GROUP BY kr.kritikalität_id, kr.kritikalität_name, kr.kritikalität_gewichtung
         ORDER BY kr.kritikalität_gewichtung DESC
+      `),
+      pool.query(`
+        SELECT COUNT(*)::int AS unread_messages
+        FROM ticket_messages m
+        JOIN ticket t ON m.ticketnr = t.ticketnr
+        JOIN status s ON t.status_id = s.status_id
+        WHERE m.message_type = 'email'
+        AND m.created_at > (
+          SELECT COALESCE(MAX(created_at), '1970-01-01'::timestamp)
+          FROM ticket_messages
+          WHERE ticketnr = m.ticketnr AND message_type = 'technician'
+        )
+        AND s.is_terminal = false
       `)
     ]);
+
+    // Ungematchte Emails
+    let unmatchedCount = 0;
+    try {
+      const unmatchedResult = await pool.query('SELECT COUNT(*)::int AS cnt FROM unmatched_emails');
+      unmatchedCount = unmatchedResult.rows[0].cnt;
+    } catch (e) { /* Tabelle existiert noch nicht */ }
 
     res.json({
       stats: ticketStats.rows[0],
       statusVerteilung: statusDist.rows,
       letzte_tickets: recentTickets.rows,
-      kritikalitaetVerteilung: kritikalitaetDist.rows
+      kritikalitaetVerteilung: kritikalitaetDist.rows,
+      unread_messages: unreadResult.rows[0].unread_messages,
+      unmatched_emails: unmatchedCount
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

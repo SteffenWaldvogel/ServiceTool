@@ -11,95 +11,166 @@ const transporter = nodemailer.createTransport({
   port: parseInt(process.env.SMTP_PORT || '587'),
   secure: false,
   auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS
+    user: process.env.GMAIL_USER || process.env.SMTP_USER,
+    pass: process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS
   }
 });
 
-async function sendConfirmationEmail(toEmail, ticket) {
-  if (!process.env.SMTP_USER) return;
-  await transporter.sendMail({
-    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+// ─── addMessageToTicket ───────────────────────────────────────────────────────
+async function addMessageToTicket(ticketnr, fromEmail, fromName, messageText, messageType = 'email') {
+  const ticketCheck = await pool.query('SELECT ticketnr FROM ticket WHERE ticketnr = $1', [ticketnr]);
+  if (ticketCheck.rows.length === 0) {
+    console.log(`⚠️  Ticket #${ticketnr} nicht gefunden – Nachricht ignoriert`);
+    return null;
+  }
+  const result = await pool.query(
+    `INSERT INTO ticket_messages (ticketnr, from_email, from_name, message, message_type, is_internal, created_at)
+     VALUES ($1, $2, $3, $4, $5, false, NOW()) RETURNING *`,
+    [ticketnr, fromEmail, fromName || fromEmail, messageText, messageType]
+  );
+  await pool.query(`UPDATE ticket SET updated_at = NOW(), "geändert_am" = NOW() WHERE ticketnr = $1`, [ticketnr]);
+  console.log(`✅ Nachricht zu Ticket #${ticketnr} gespeichert (${messageType})`);
+  return result.rows[0];
+}
+
+// ─── sendTicketReply ──────────────────────────────────────────────────────────
+async function sendTicketReply({ ticketnr, toEmail, toName, subject, htmlBody, textBody, sentBy }) {
+  const finalSubject = subject || `[Ticket #${ticketnr}] Rückmeldung vom Service`;
+  const info = await transporter.sendMail({
+    from: `"Service" <${process.env.GMAIL_USER}>`,
     to: toEmail,
-    subject: `[${ticket.ticket_nummer}] Ihr Service-Ticket wurde erstellt`,
+    subject: finalSubject,
+    text: textBody,
+    html: htmlBody,
+    headers: {
+      'References': `ticket-${ticketnr}@servicetool`,
+      'X-Ticket-ID': String(ticketnr),
+    }
+  });
+  await addMessageToTicket(ticketnr, process.env.GMAIL_USER, sentBy || 'Service', textBody || htmlBody, 'technician');
+  console.log(`📤 Reply zu Ticket #${ticketnr} gesendet an ${toEmail}`);
+  return info;
+}
+
+// ─── sendConfirmationEmail ────────────────────────────────────────────────────
+async function sendConfirmationEmail(toEmail, ticket) {
+  if (!process.env.GMAIL_USER && !process.env.SMTP_USER) return;
+  await transporter.sendMail({
+    from: process.env.SMTP_FROM || process.env.GMAIL_USER || process.env.SMTP_USER,
+    to: toEmail,
+    subject: `[Ticket #${ticket.ticketnr}] Ihr Service-Ticket wurde erstellt`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px;">
         <h2 style="color: #1e293b;">Service-Ticket erstellt</h2>
         <p>Ihr Ticket wurde erfolgreich erstellt.</p>
         <table style="border-collapse: collapse; width: 100%;">
-          <tr><td style="padding: 8px; font-weight: bold;">Ticket-Nr.:</td><td style="padding: 8px;">${ticket.ticket_nummer}</td></tr>
-          <tr><td style="padding: 8px; font-weight: bold;">Betreff:</td><td style="padding: 8px;">${ticket.betreff}</td></tr>
+          <tr><td style="padding: 8px; font-weight: bold;">Ticket-Nr.:</td><td style="padding: 8px;">#${ticket.ticketnr}</td></tr>
           <tr style="background:#f8fafc;"><td style="padding: 8px; font-weight: bold;">Status:</td><td style="padding: 8px;">Offen</td></tr>
         </table>
         <p style="margin-top: 20px; color: #64748b; font-size: 12px;">
-          Bitte antworten Sie nicht auf diese E-Mail. Für Rückfragen verwenden Sie die Ticket-Nummer als Betreff.
+          Bitte antworten Sie mit <strong>[Ticket #${ticket.ticketnr}]</strong> im Betreff für Rückfragen.
         </p>
       </div>
     `
   });
 }
 
-// ─── IMAP Email Polling ───────────────────────────────────────────────────────
-function generateTicketNummer() {
-  const now = new Date();
-  return `TK-${now.getFullYear()}-${Math.floor(Math.random() * 90000) + 10000}`;
-}
-
-async function processIncomingEmail(parsed) {
+// ─── 4-stufiger Matching-Algorithmus ─────────────────────────────────────────
+async function processIncomingEmail(parsed, rawText) {
   try {
     const fromAddress = parsed.from?.value?.[0]?.address?.toLowerCase();
+    const fromName = parsed.from?.value?.[0]?.name || fromAddress;
     if (!fromAddress) return;
 
-    const messageId = parsed.messageId;
+    const subject = parsed.subject || '';
+    const messageText = parsed.text || (parsed.html ? parsed.html.replace(/<[^>]+>/g, '') : '') || '';
 
-    // Check duplicate
-    const existing = await pool.query(
-      'SELECT id FROM ticket WHERE email_message_id = $1',
-      [messageId]
-    );
-    if (existing.rows.length > 0) return;
+    // STUFE 1: Ticket-Nummer im Betreff
+    const ticketMatch = subject.match(/\[Ticket #(\d+)\]/i) || subject.match(/ticket[- #]+(\d+)/i);
+    if (ticketMatch) {
+      const ticketnr = parseInt(ticketMatch[1]);
+      const termCheck = await pool.query(
+        `SELECT t.ticketnr, s.is_terminal
+         FROM ticket t
+         JOIN status s ON t.status_id = s.status_id
+         WHERE t.ticketnr = $1`,
+        [ticketnr]
+      );
+      if (termCheck.rows.length > 0) {
+        if (termCheck.rows[0].is_terminal) {
+          console.log(`⚠️  Ticket #${ticketnr} ist abgeschlossen – speichere trotzdem`);
+        }
+        await addMessageToTicket(ticketnr, fromAddress, fromName, messageText.slice(0, 5000), 'email');
+        console.log(`📨 Email von ${fromAddress}: Match-Stufe 1 → Ticket #${ticketnr}`);
+        return;
+      }
+    }
 
-    // Match sender to Kunde via kunden_emails
+    // STUFE 2: Absender-Email gegen kunden_emails
     const kundeResult = await pool.query(
-      `SELECT k.id AS kunden_id, k.name AS kunden_name
-       FROM kunden_emails ke
-       JOIN kunden k ON ke.kunden_id = k.id
-       WHERE LOWER(ke.email) = $1`,
+      `SELECT k.kundennummer FROM kunden k
+       JOIN kunden_emails ke ON k.kundennummer = ke.kundennummer
+       WHERE LOWER(ke.email_adresse) = LOWER($1)
+       LIMIT 1`,
       [fromAddress]
     );
 
-    const kunden_id = kundeResult.rows[0]?.kunden_id || null;
+    if (kundeResult.rows.length > 0) {
+      const kundennummer = kundeResult.rows[0].kundennummer;
 
-    // Get default status "Offen"
-    const statusResult = await pool.query("SELECT id FROM status WHERE name='Offen' LIMIT 1");
-    const status_id = statusResult.rows[0]?.id || null;
+      // Neuestes offenes Ticket dieses Kunden
+      const openTicket = await pool.query(
+        `SELECT t.ticketnr
+         FROM ticket t
+         JOIN status s ON t.status_id = s.status_id
+         WHERE t.ticket_kundennummer = $1 AND s.is_terminal = false
+         ORDER BY t.created_at DESC
+         LIMIT 1`,
+        [kundennummer]
+      );
 
-    const ticket_nummer = generateTicketNummer();
-    const betreff = parsed.subject || '(Kein Betreff)';
-    const beschreibung = parsed.text || parsed.html?.replace(/<[^>]+>/g, '') || '';
+      if (openTicket.rows.length > 0) {
+        const ticketnr = openTicket.rows[0].ticketnr;
+        await addMessageToTicket(ticketnr, fromAddress, fromName, messageText.slice(0, 5000), 'email');
+        console.log(`📨 Email von ${fromAddress}: Match-Stufe 2 → Ticket #${ticketnr}`);
+        return;
+      } else {
+        // Kein offenes Ticket → neues erstellen
+        const statusResult = await pool.query("SELECT status_id FROM status WHERE status_name = 'Offen' LIMIT 1");
+        const kritResult = await pool.query('SELECT kritikalität_id FROM kritikalität ORDER BY kritikalität_gewichtung ASC LIMIT 1');
+        const katResult = await pool.query('SELECT kategorie_id FROM kategorie LIMIT 1');
 
-    const result = await pool.query(
-      `INSERT INTO ticket (ticket_nummer, kunden_id, status_id, betreff, beschreibung,
-        per_email_erstellt, email_message_id, erstellt_von)
-       VALUES ($1,$2,$3,$4,$5,true,$6,$7) RETURNING *`,
-      [ticket_nummer, kunden_id, status_id, betreff, beschreibung.slice(0, 5000), messageId, fromAddress]
-    );
+        const status_id = statusResult.rows[0]?.status_id;
+        const krit_id = kritResult.rows[0]?.['kritikalität_id'];
+        const kat_id = katResult.rows[0]?.kategorie_id;
 
-    console.log(`[Email] Ticket erstellt: ${ticket_nummer} von ${fromAddress}`);
-
-    // Send confirmation if kunde found
-    if (kunden_id) {
-      try {
-        await sendConfirmationEmail(fromAddress, result.rows[0]);
-      } catch (e) {
-        console.error('[Email] Bestätigung fehlgeschlagen:', e.message);
+        if (status_id && krit_id && kat_id) {
+          const ticketResult = await pool.query(
+            `INSERT INTO ticket (kategorie_id, "kritikalität_id", status_id, ticket_kundennummer, erstellt_von, erstellt_am)
+             VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING ticketnr`,
+            [kat_id, krit_id, status_id, kundennummer, fromAddress]
+          );
+          const newTicketnr = ticketResult.rows[0].ticketnr;
+          await addMessageToTicket(newTicketnr, fromAddress, fromName, messageText.slice(0, 5000), 'email');
+          console.log(`📨 Email von ${fromAddress}: Match-Stufe 2b → neues Ticket #${newTicketnr}`);
+          return;
+        }
       }
     }
+
+    // STUFE 3: Kein Match → in unmatched_emails speichern
+    await pool.query(
+      'INSERT INTO unmatched_emails (from_email, from_name, subject, message) VALUES ($1, $2, $3, $4)',
+      [fromAddress, fromName, subject, messageText.slice(0, 5000)]
+    );
+    console.log(`📨 Email von ${fromAddress}: kein Match → unmatched_emails`);
+
   } catch (err) {
     console.error('[Email] processIncomingEmail Fehler:', err.message);
   }
 }
 
+// ─── IMAP Email Polling ───────────────────────────────────────────────────────
 function fetchUnseen(imap) {
   imap.search(['UNSEEN'], (err, results) => {
     if (err || !results?.length) return;
@@ -111,13 +182,16 @@ function fetchUnseen(imap) {
         stream.on('data', (chunk) => { buffer += chunk.toString('utf8'); });
         stream.once('end', async () => {
           const parsed = await simpleParser(buffer).catch(() => null);
-          if (parsed) await processIncomingEmail(parsed);
+          if (parsed) await processIncomingEmail(parsed, buffer);
         });
       });
     });
     fetch.once('error', (e) => console.error('[IMAP] Fetch error:', e.message));
   });
 }
+
+let pollingInterval = null;
+let imapConnection = null;
 
 function startEmailPolling() {
   if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
@@ -134,15 +208,17 @@ function startEmailPolling() {
       tls: true,
       tlsOptions: { rejectUnauthorized: false }
     });
+    imapConnection = imap;
 
     imap.once('ready', () => {
       imap.openBox('INBOX', false, (err) => {
         if (err) { console.error('[IMAP] openBox Fehler:', err.message); return; }
         console.log('[Email] IMAP verbunden – polling alle 30s');
         fetchUnseen(imap);
-        const interval = setInterval(() => fetchUnseen(imap), 30000);
+        pollingInterval = setInterval(() => fetchUnseen(imap), 30000);
         imap.once('end', () => {
-          clearInterval(interval);
+          clearInterval(pollingInterval);
+          pollingInterval = null;
           console.log('[Email] IMAP Verbindung getrennt – reconnect in 10s');
           setTimeout(connectAndPoll, 10000);
         });
@@ -160,4 +236,28 @@ function startEmailPolling() {
   connectAndPoll();
 }
 
-module.exports = { startEmailPolling, sendConfirmationEmail };
+function stopEmailPolling() {
+  if (pollingInterval) {
+    clearInterval(pollingInterval);
+    pollingInterval = null;
+  }
+  if (imapConnection) {
+    try { imapConnection.end(); } catch (e) {}
+    imapConnection = null;
+  }
+}
+
+async function checkNewEmails() {
+  if (imapConnection) {
+    fetchUnseen(imapConnection);
+  }
+}
+
+module.exports = {
+  addMessageToTicket,
+  sendTicketReply,
+  sendConfirmationEmail,
+  startEmailPolling,
+  stopEmailPolling,
+  checkNewEmails
+};

@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { api } from '../utils/api';
 import CustomFieldsSection from '../components/CustomFieldsSection';
+import MessageThread from '../components/MessageThread';
+import ReplyBox from '../components/ReplyBox';
 
 import { getKritColor } from '../utils/helpers';
 
@@ -54,74 +56,69 @@ function EditField({ label, value, editValue, type = 'text', options, onSave, nu
   );
 }
 
-function MessageThread({ messages, ticketnr, onMessageAdded }) {
-  const [newMessage, setNewMessage] = useState('');
-  const [fromName, setFromName] = useState('');
-  const [sending, setSending] = useState(false);
+function MoveMessageModal({ message, currentTicketnr, onClose, onMoved }) {
+  const [targetId, setTargetId] = useState('');
+  const [targetTicket, setTargetTicket] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const send = async (e) => {
-    e.preventDefault();
-    if (!newMessage.trim()) return;
-    setSending(true);
+  const lookupTicket = async () => {
+    if (!targetId) return;
     try {
-      await api.addTicketMessage(ticketnr, { message: newMessage.trim(), from_name: fromName.trim() || null, message_type: 'technician' });
-      setNewMessage('');
-      onMessageAdded();
-    } catch (err) { console.error(err); }
-    finally { setSending(false); }
+      const t = await api.getTicket(targetId);
+      setTargetTicket(t);
+      setError('');
+    } catch {
+      setError('Ticket nicht gefunden');
+      setTargetTicket(null);
+    }
   };
 
-  const typeLabel = (t) => {
-    if (t === 'email') return { label: 'E-Mail', color: '#8b5cf6' };
-    if (t === 'technician') return { label: 'Techniker', color: 'var(--accent)' };
-    return { label: 'Web', color: '#10b981' };
+  const move = async () => {
+    setLoading(true);
+    try {
+      await api.linkMessage(targetId, message.message_id);
+      onMoved();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="card">
-      <div className="card-title">Nachrichten ({messages.length})</div>
-      {messages.length === 0 ? (
-        <div className="text-muted" style={{ marginBottom: 16 }}>Noch keine Nachrichten</div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
-          {messages.map((msg, i) => {
-            const t = typeLabel(msg.message_type);
-            return (
-              <div key={msg.message_id} style={{
-                padding: '12px 14px',
-                background: i === 0 ? 'var(--bg-elevated)' : 'var(--bg-card)',
-                borderRadius: 'var(--radius-sm)',
-                borderLeft: `3px solid ${t.color}`
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, flexWrap: 'wrap', gap: 6 }}>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    {i === 0 && <span className="badge" style={{ background: 'rgba(99,102,241,0.15)', color: '#6366f1', fontSize: 10 }}>Erstmeldung</span>}
-                    <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>{msg.from_name || msg.from_email || 'System'}</span>
-                    {msg.from_email && msg.from_name && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{msg.from_email}</span>}
-                    <span className="badge" style={{ background: t.color + '22', color: t.color, fontSize: 10 }}>{t.label}</span>
-                  </div>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{new Date(msg.created_at).toLocaleString('de-DE')}</span>
-                </div>
-                <div style={{ fontSize: 13, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{msg.message}</div>
-              </div>
-            );
-          })}
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="modal-header">
+          <div className="modal-title">Nachricht verschieben</div>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}>&#x2715;</button>
         </div>
-      )}
-      <form onSubmit={send}>
+        {error && <div className="error-banner">{error}</div>}
         <div className="form-group">
-          <label className="form-label">Neue Nachricht</label>
-          <textarea className="form-control" value={newMessage} onChange={e => setNewMessage(e.target.value)} rows={3} placeholder="Antwort oder interne Notiz…" />
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-          <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-            <input className="form-control" value={fromName} onChange={e => setFromName(e.target.value)} placeholder="Ihr Name (optional)" />
+          <label className="form-label">Ziel-Ticket-Nummer</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              className="form-control"
+              value={targetId}
+              onChange={e => setTargetId(e.target.value)}
+              placeholder="Ticket-Nr."
+              onKeyDown={e => e.key === 'Enter' && lookupTicket()}
+            />
+            <button className="btn btn-secondary" type="button" onClick={lookupTicket}>Suchen</button>
           </div>
-          <button type="submit" className="btn btn-primary btn-sm" disabled={sending || !newMessage.trim()}>
-            {sending ? 'Senden…' : 'Senden'}
+        </div>
+        {targetTicket && (
+          <div style={{ padding: '8px 12px', background: 'rgba(59,130,246,0.1)', borderRadius: 6, fontSize: 13, marginBottom: 12 }}>
+            #{targetTicket.ticketnr} – {targetTicket.kunden_name} – {targetTicket.status_name}
+          </div>
+        )}
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={onClose}>Abbrechen</button>
+          <button className="btn btn-primary" disabled={!targetTicket || loading} onClick={move}>
+            {loading ? '…' : 'Verschieben'}
           </button>
         </div>
-      </form>
+      </div>
     </div>
   );
 }
@@ -136,6 +133,10 @@ export default function TicketDetail() {
   const [maschinen, setMaschinen] = useState([]);
   const [kundenAP, setKundenAP] = useState([]);
   const [delConfirm, setDelConfirm] = useState(false);
+  const [showReply, setShowReply] = useState(false);
+  const [replyInternal, setReplyInternal] = useState(false);
+  const [msgSuccess, setMsgSuccess] = useState('');
+  const [movingMsg, setMovingMsg] = useState(null);
 
   const loadTicket = () => api.getTicket(id).then(t => {
     setTicket(t);
@@ -247,7 +248,48 @@ export default function TicketDetail() {
 
       <div className="detail-layout">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <MessageThread messages={ticket.messages || []} ticketnr={ticket.ticketnr} onMessageAdded={loadTicket} />
+          {/* Kommunikationsbereich */}
+          <div className="card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div className="card-title" style={{ marginBottom: 0 }}>Kommunikation ({(ticket.messages || []).length})</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => { setReplyInternal(false); setShowReply(v => !v); }}
+                >
+                  &#9993; Antworten
+                </button>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => { setReplyInternal(true); setShowReply(v => !v); }}
+                >
+                  &#128274; Notiz
+                </button>
+              </div>
+            </div>
+            {msgSuccess && (
+              <div className="success-banner" style={{ marginBottom: 12 }}>{msgSuccess}</div>
+            )}
+            <MessageThread
+              messages={ticket.messages || []}
+              onMoveMessage={(msg) => setMovingMsg(msg)}
+            />
+            {showReply && (
+              <ReplyBox
+                ticketnr={ticket.ticketnr}
+                defaultToEmail={ticket.ap_email || (kunde?.emails?.[0] || '')}
+                defaultToName={ticket.ap_name || ''}
+                initialInternal={replyInternal}
+                onClose={() => setShowReply(false)}
+                onSent={() => {
+                  setShowReply(false);
+                  setMsgSuccess('Nachricht gespeichert');
+                  setTimeout(() => setMsgSuccess(''), 3000);
+                  loadTicket();
+                }}
+              />
+            )}
+          </div>
 
           <CustomFieldsSection entity="tickets" tableName="ticket" entityId={ticket.ticketnr} />
 
@@ -388,6 +430,15 @@ export default function TicketDetail() {
           </div>
         </div>
       </div>
+
+      {movingMsg && (
+        <MoveMessageModal
+          message={movingMsg}
+          currentTicketnr={ticket.ticketnr}
+          onClose={() => setMovingMsg(null)}
+          onMoved={() => { setMovingMsg(null); loadTicket(); }}
+        />
+      )}
     </div>
   );
 }

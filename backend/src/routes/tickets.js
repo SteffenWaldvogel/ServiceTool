@@ -70,6 +70,37 @@ const TICKET_SELECT = `
   LEFT JOIN ansprechpartner ap ON t.ticket_ansprechpartnerid = ap.ansprechpartnerid
 `;
 
+// GET /api/tickets/unmatched
+router.get('/unmatched', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM unmatched_emails ORDER BY received_at DESC LIMIT 100');
+    res.json(result.rows);
+  } catch (err) {
+    if (err.code === '42P01') return res.json([]);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/tickets/unmatched/:id/assign
+router.post('/unmatched/:id/assign', async (req, res) => {
+  try {
+    const { ticketnr } = req.body;
+    if (!ticketnr) return res.status(400).json({ error: 'ticketnr ist erforderlich' });
+
+    const emailRow = await pool.query('SELECT * FROM unmatched_emails WHERE id = $1', [req.params.id]);
+    if (emailRow.rows.length === 0) return res.status(404).json({ error: 'Email nicht gefunden' });
+
+    const { addMessageToTicket } = require('../services/emailService');
+    const msg = await addMessageToTicket(ticketnr, emailRow.rows[0].from_email, emailRow.rows[0].from_name, emailRow.rows[0].message, 'email');
+    if (!msg) return res.status(404).json({ error: 'Ticket nicht gefunden' });
+
+    await pool.query('DELETE FROM unmatched_emails WHERE id = $1', [req.params.id]);
+    res.status(201).json(msg);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/tickets
 router.get('/', async (req, res) => {
   try {
@@ -118,7 +149,7 @@ router.get('/:id', async (req, res) => {
 
     // Fetch all messages
     const messages = await pool.query(
-      `SELECT message_id, ticketnr, from_email, from_name, message, message_type, created_at
+      `SELECT message_id, ticketnr, from_email, from_name, message, message_type, is_internal, created_at
        FROM ticket_messages
        WHERE ticketnr = $1
        ORDER BY created_at ASC`,
@@ -361,7 +392,7 @@ router.put('/:id/custom-fields', async (req, res) => {
 router.get('/:id/messages', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT message_id, ticketnr, from_email, from_name, message, message_type, created_at
+      `SELECT message_id, ticketnr, from_email, from_name, message, message_type, is_internal, created_at
        FROM ticket_messages
        WHERE ticketnr = $1
        ORDER BY created_at ASC`,
@@ -376,7 +407,7 @@ router.get('/:id/messages', async (req, res) => {
 // POST /api/tickets/:id/messages
 router.post('/:id/messages', async (req, res) => {
   try {
-    const { from_email, from_name, message, message_type = 'web' } = req.body;
+    const { from_email, from_name, message, message_type = 'web', is_internal = false } = req.body;
 
     if (!message?.trim()) {
       return res.status(400).json({ error: 'message ist erforderlich' });
@@ -392,25 +423,90 @@ router.post('/:id/messages', async (req, res) => {
     }
 
     const result = await pool.query(
-      `INSERT INTO ticket_messages (ticketnr, from_email, from_name, message, message_type)
-       VALUES ($1,$2,$3,$4,$5)
+      `INSERT INTO ticket_messages (ticketnr, from_email, from_name, message, message_type, is_internal)
+       VALUES ($1,$2,$3,$4,$5,$6)
        RETURNING *`,
       [
         req.params.id,
         from_email || null,
         from_name || null,
         message.trim(),
-        message_type
+        message_type,
+        is_internal || false
       ]
     );
 
     // Update geändert_am on ticket
     await pool.query(
-      'UPDATE ticket SET geändert_am=NOW(), updated_at=NOW() WHERE ticketnr=$1',
+      'UPDATE ticket SET "geändert_am"=NOW(), updated_at=NOW() WHERE ticketnr=$1',
       [req.params.id]
     );
 
     res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/tickets/:id/reply
+router.post('/:id/reply', async (req, res) => {
+  try {
+    const { to_email, to_name, subject, message, sent_by } = req.body;
+    if (!message?.trim()) return res.status(400).json({ error: 'message ist erforderlich' });
+
+    const ticketCheck = await pool.query('SELECT ticketnr FROM ticket WHERE ticketnr = $1', [req.params.id]);
+    if (ticketCheck.rows.length === 0) return res.status(404).json({ error: 'Ticket nicht gefunden' });
+
+    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+      // Email nicht konfiguriert – nur als Notiz speichern
+      const result = await pool.query(
+        `INSERT INTO ticket_messages (ticketnr, from_email, from_name, message, message_type, is_internal)
+         VALUES ($1, $2, $3, $4, 'technician', false) RETURNING *`,
+        [req.params.id, sent_by || 'Service', sent_by || 'Service', message.trim()]
+      );
+      await pool.query('UPDATE ticket SET updated_at=NOW(), "geändert_am"=NOW() WHERE ticketnr=$1', [req.params.id]);
+      return res.status(503).json({
+        error: 'Email nicht konfiguriert – Nachricht als Notiz gespeichert',
+        message: result.rows[0]
+      });
+    }
+
+    const { sendTicketReply } = require('../services/emailService');
+    await sendTicketReply({
+      ticketnr: parseInt(req.params.id),
+      toEmail: to_email,
+      toName: to_name,
+      subject,
+      textBody: message.trim(),
+      sentBy: sent_by
+    });
+
+    // Gespeicherte Nachricht zurückgeben
+    const lastMsg = await pool.query(
+      `SELECT * FROM ticket_messages WHERE ticketnr = $1 AND message_type = 'technician' ORDER BY created_at DESC LIMIT 1`,
+      [req.params.id]
+    );
+    res.status(201).json(lastMsg.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/tickets/:id/link-message
+router.post('/:id/link-message', async (req, res) => {
+  try {
+    const { message_id } = req.body;
+    if (!message_id) return res.status(400).json({ error: 'message_id ist erforderlich' });
+
+    const result = await pool.query(
+      'UPDATE ticket_messages SET ticketnr = $1 WHERE message_id = $2 RETURNING *',
+      [req.params.id, message_id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Nachricht nicht gefunden' });
+
+    await pool.query('UPDATE ticket SET updated_at=NOW(), "geändert_am"=NOW() WHERE ticketnr=$1', [req.params.id]);
+
+    res.json({ success: true, message: `Nachricht zu Ticket #${req.params.id} verschoben`, data: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

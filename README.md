@@ -93,6 +93,14 @@ Stammdaten (Abteilungen, Kategorien, Status etc.) einspielen:
 psql -d servicetickets -f backend/src/config/seed.sql
 ```
 
+### Datenbank-Migrationen
+
+Nach dem initialen Setup bei Bedarf ausführen:
+
+```bash
+psql -d servicetickets -f backend/migrations/003_unmatched_emails.sql
+```
+
 ### 2. Backend einrichten
 
 ```bash

@@ -8,6 +8,25 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [UNRELEASED]
 
+### Added (Session 5)
+- emailService.js: Schema-Fix (ticketnr statt id, Fehlspalten entfernt)
+- emailService.js: addMessageToTicket() vollständig implementiert
+- emailService.js: sendTicketReply() mit Nachrichtenspeicherung
+- Email-Matching: 4-stufiger Algorithmus (Betreff-Regex → Kunden-Match → unmatched)
+- backend/migrations/003_unmatched_emails.sql
+- ticket_messages: is_internal-Spalte (ALTER TABLE)
+- POST /api/tickets/:id/reply
+- POST /api/tickets/:id/link-message
+- GET /api/tickets/unmatched + POST /api/tickets/unmatched/:id/assign
+- dashboard-stats: unread_messages + unmatched_emails
+- MessageThread.jsx (chronologischer Thread, 3 Nachrichtentypen + interne Notizen, Verschieben-Button)
+- ReplyBox.jsx (Email-Reply + interne Notizen, localStorage Techniker-Name)
+- UnmatchedEmailsPanel.jsx (manuelle Ticket-Zuweisung)
+- TicketDetail.jsx: Kommunikationsbereich mit Thread + Reply + Nachricht verschieben (MoveMessageModal)
+- SystemPage: Tab "Ungematchte Emails" mit Badge
+- App.jsx: Sidebar-Badge für ungelesene Nachrichten + ungematchte Emails (60s Polling)
+- api.js: getMessages, addMessage, sendReply, linkMessage, getUnmatchedEmails, assignUnmatchedEmail, getStats
+
 ### Added (Session 4)
 - **KundenDetail**: Inline-Form für Ansprechpartner – ausklappbares Form mit QuickCreate für Abteilung/Position und DuplicateWarning-Integration
 - **KundenDetail**: Inline-Form für Maschinen – Anlegen direkt in KundenDetail mit QuickCreate Maschinentyp, Dubletten-Check, "Sofort Ticket erstellen" Checkbox

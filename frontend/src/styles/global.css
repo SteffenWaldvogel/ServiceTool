@@ -487,3 +487,21 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   font-size: 13px;
   margin-bottom: 16px;
 }
+
+/* ── Message Thread ────────────────────────────────── */
+.msg-thread { display: flex; flex-direction: column; gap: 12px; }
+.msg-bubble { max-width: 85%; padding: 12px 16px; border-radius: 8px; background: var(--bg-surface); }
+.msg-email { align-self: flex-start; border-left: 3px solid var(--accent); }
+.msg-technician { align-self: flex-end; border-left: 3px solid #10b981; }
+.msg-system { align-self: center; color: var(--text-muted); font-size: 12px; background: transparent; max-width: 100%; text-align: center; }
+.msg-internal { border: 1px dashed #eab308; background: rgba(234,179,8,0.05); }
+.msg-header { font-size: 11px; color: var(--text-secondary); margin-bottom: 6px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.msg-text { font-size: 13px; white-space: pre-wrap; word-break: break-word; }
+.msg-badge { font-size: 10px; font-family: var(--font-mono, 'IBM Plex Mono', monospace); padding: 1px 6px; border-radius: 3px; }
+
+/* ── Sidebar Badges ─────────────────────────────────── */
+.nav-badge { background: var(--accent); color: #fff; font-size: 10px; font-family: var(--font-mono, 'IBM Plex Mono', monospace); padding: 1px 5px; border-radius: 9px; margin-left: auto; min-width: 18px; text-align: center; }
+.nav-badge-warn { background: #f97316; }
+
+/* ── Success Banner ─────────────────────────────────── */
+.success-banner { background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.3); border-radius: 6px; padding: 8px 12px; font-size: 13px; }

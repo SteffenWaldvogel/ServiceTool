@@ -4,6 +4,32 @@ Chronological log of development sessions for the Service Tool project.
 
 ---
 
+## Session 5 – 2026-03-18
+**Ziel:** Ticket-Kommunikation: Email-Thread, Matching, manuelle Verknüpfung
+**Scope:** emailService Fix, ticket_messages CRUD, Thread-UI, Reply, Email-Matching, manuelle Verknüpfung
+
+### Tasks
+- ✅ Migration 003: unmatched_emails Tabelle
+- ✅ emailService.js: Schema-Fix + addMessageToTicket + sendTicketReply + 4-stufiger Matching-Algorithmus
+- ✅ Backend: POST /api/tickets/:id/reply
+- ✅ Backend: POST /api/tickets/:id/link-message
+- ✅ Backend: GET/POST /api/tickets/unmatched + assign
+- ✅ Backend: dashboard-stats um unread_messages + unmatched_emails erweitern
+- ✅ MessageThread.jsx
+- ✅ ReplyBox.jsx
+- ✅ UnmatchedEmailsPanel.jsx
+- ✅ TicketDetail.jsx: Kommunikationsbereich
+- ✅ SystemPage.jsx: Tab Ungematchte Emails
+- ✅ App.jsx: Sidebar-Badge
+- ✅ api.js: neue Methoden
+- ✅ global.css: neue CSS-Klassen
+
+**Offene Punkte:**
+- Email-Credentials (GMAIL_USER / GMAIL_APP_PASSWORD) noch nicht konfiguriert → Reply-Button zeigt 503-Hinweis
+- IMAP-Polling inaktiv bis Credentials eingetragen
+
+---
+
 ## Session 4b – 2026-03-18
 **Ziel:** GitHub MCP Setup + vollständige Repo-Analyse gegen Prompts 1–4
 **Tool:** GitHub MCP (project-scope, SteffenWaldvogel/ServiceTool) + lokale Dateiprüfung

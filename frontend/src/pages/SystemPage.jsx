@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { api } from '../utils/api';
+import UnmatchedEmailsPanel from '../components/UnmatchedEmailsPanel';
 
 const KNOWN_TABLES = [
   'kunden', 'ansprechpartner', 'ticket', 'maschine', 'ersatzteile',
@@ -54,9 +55,15 @@ function OperationBadge({ op }) {
 }
 
 export default function SystemPage() {
+  const [activeTab, setActiveTab] = useState('audit');
+  const [unmatchedCount, setUnmatchedCount] = useState(0);
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    api.getStats().then(s => setUnmatchedCount(s.unmatched_emails || 0)).catch(() => {});
+  }, []);
 
   const [filters, setFilters] = useState({
     table_name: '',
@@ -105,10 +112,41 @@ export default function SystemPage() {
       <div className="page-header">
         <div>
           <div className="page-title">System</div>
-          <div className="page-subtitle">Audit-Log – Änderungsprotokoll (nur Lesen)</div>
+          <div className="page-subtitle">Audit-Log & Email-Management</div>
         </div>
-        <button className="btn btn-secondary btn-sm" onClick={load}>Aktualisieren</button>
+        {activeTab === 'audit' && (
+          <button className="btn btn-secondary btn-sm" onClick={load}>Aktualisieren</button>
+        )}
       </div>
+
+      {/* Tab-Leiste */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid var(--border)', paddingBottom: 0 }}>
+        <button
+          className={`btn btn-sm ${activeTab === 'audit' ? 'btn-primary' : 'btn-ghost'}`}
+          style={{ borderRadius: '4px 4px 0 0' }}
+          onClick={() => setActiveTab('audit')}
+        >
+          Audit-Log
+        </button>
+        <button
+          className={`btn btn-sm ${activeTab === 'unmatched' ? 'btn-primary' : 'btn-ghost'}`}
+          style={{ borderRadius: '4px 4px 0 0', display: 'flex', alignItems: 'center', gap: 6 }}
+          onClick={() => setActiveTab('unmatched')}
+        >
+          Ungematchte Emails
+          {unmatchedCount > 0 && (
+            <span className="nav-badge" style={{ background: '#f97316' }}>{unmatchedCount}</span>
+          )}
+        </button>
+      </div>
+
+      {activeTab === 'unmatched' && (
+        <UnmatchedEmailsPanel onAssigned={() => {
+          api.getStats().then(s => setUnmatchedCount(s.unmatched_emails || 0)).catch(() => {});
+        }} />
+      )}
+
+      {activeTab === 'audit' && (<>
 
       {/* Filter bar */}
       <div className="card" style={{ marginBottom: 20 }}>
@@ -214,6 +252,7 @@ export default function SystemPage() {
           </div>
         </div>
       )}
+      </>)}
     </div>
   );
 }
