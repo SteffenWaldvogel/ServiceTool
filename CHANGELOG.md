@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [UNRELEASED]
 
+### Added (Session 11)
+- Dashboard-Zeitfilter: Buttons Gesamt / Monat / Woche (period-Parameter an dashboard-stats)
+- Neues Stat-Tile „Diese Woche": Tickets erstellt in letzten 7 Tagen
+- Neues Stat-Tile „Ø Lösungszeit": Durchschnittliche Lösungszeit in Stunden (geschlossene Tickets)
+- Neues Diagramm „Offene Tickets pro Techniker": horizontales Balkendiagramm
+- backend/lookup.js: period-Filter (week/month/all), technikerVerteilung-Query, avg_loesungszeit_h + diese_woche in Stats
+
 ### Added (Session 9)
 - Ticket-Zuweisung: `assigned_to` FK auf `users` in `ticket`-Tabelle (Migration 007)
 - TicketList: neue Spalte "Zugewiesen", sortierbar

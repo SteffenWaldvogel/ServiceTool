@@ -4,6 +4,21 @@ Chronological log of development sessions for the Service Tool project.
 
 ---
 
+## Session 11 – 2026-03-18
+**Ziel:** Dashboard-Erweiterungen (Zeitfilter, Techniker-Chart, neue Stat-Tiles)
+**Scope:** lookup.js, api.js, Dashboard.jsx
+
+### Tasks
+- ✅ lookup.js: period-Filter (?period=week|month|all) in dashboard-stats
+- ✅ lookup.js: technikerVerteilung-Query (offene Tickets pro Techniker, TOP 10)
+- ✅ lookup.js: avg_loesungszeit_h + diese_woche in ticketStats-Query
+- ✅ api.js: getDashboardStats(period = 'all') mit optionalem period-Param
+- ✅ Dashboard.jsx: period-State + PERIODS-Array + Filter-Buttons im Page-Header
+- ✅ Dashboard.jsx: neue Stat-Tiles (Diese Woche, Ø Lösungszeit)
+- ✅ Dashboard.jsx: horizontales Balkendiagramm „Offene Tickets pro Techniker"
+
+---
+
 ## Session 9 – 2026-03-18
 **Ziel:** Ticket-Zuweisung an Techniker
 **Scope:** Migration 007, tickets.js, lookup.js, TicketDetail, TicketList, Dashboard

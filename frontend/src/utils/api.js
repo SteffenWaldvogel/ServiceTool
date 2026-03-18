@@ -107,7 +107,8 @@ export const api = {
     const q = abteilung_id ? `?abteilung_id=${abteilung_id}` : '';
     return request(`/lookup/positionen${q}`);
   },
-  getDashboardStats: () => request('/lookup/dashboard-stats'),
+  getDashboardStats: (period = 'all') =>
+    request(`/lookup/dashboard-stats${period !== 'all' ? '?period=' + period : ''}`),
   getLookupUsers: () => request('/lookup/users'),
   getCustomFieldDefs: (tableName) => request(`/lookup/custom-fields/${tableName}`),
 
