@@ -4,6 +4,30 @@ Chronological log of development sessions for the Service Tool project.
 
 ---
 
+## Session 4b – 2026-03-18
+**Ziel:** GitHub MCP Setup + vollständige Repo-Analyse gegen Prompts 1–4
+**Tool:** GitHub MCP (project-scope, SteffenWaldvogel/ServiceTool) + lokale Dateiprüfung
+
+### Analyseergebnis:
+- Gesamt: **41 ✅ / 1 ⚠️ / 0 ❌**
+- Letzter DEVLOG-Eintrag: Session 4 – 2026-03-18, alle Tasks abgeschlossen
+- Version laut CHANGELOG: [UNRELEASED] (Session 4)
+
+### Fehlende Dateien:
+- keine ❌ Dateien — alle 32 Pflichtdateien vorhanden
+
+### Unvollständige Features:
+- ⚠️ **emailService.js**: Referenziert nicht existierende Spalten in `ticket` (`email_message_id`, `per_email_erstellt`, `id` statt `ticketnr`). Email-Eingang würde bei IMAP-Poll crashen. Kein `addMessageToTicket()` implementiert.
+
+### Bereit für Prompt 5 (Ticket-Kommunikation): **JA**
+**Begründung:** ticket_messages-Tabelle ✅, Backend-Routen GET/POST /api/tickets/:id/messages ✅, TicketDetail.jsx mit MessageThread ✅. emailService-Bugfix ist Teil von Prompt 5.
+
+### Nächste Schritte:
+1. **Prompt 5 starten** — Ticket-Kommunikation: E-Mail-Eingang reparieren (emailService.js Schema-Fix), Nachrichten-Compose aus TicketDetail, Reply-by-Mail
+2. emailService.js: `id` → `ticketnr`, `email_message_id`/`per_email_erstellt` entfernen oder Spalten zu Schema ergänzen
+
+---
+
 ## Session 4 – 2026-03-18
 **Ziel:** Lückenschluss – alle offenen Punkte aus Soll/Ist-Analyse schließen
 **Scope:**
