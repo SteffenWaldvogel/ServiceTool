@@ -4,6 +4,29 @@ Chronological log of development sessions for the Service Tool project.
 
 ---
 
+## Session 7 – 2026-03-18
+**Ziel:** Granulare Benutzer- & Rechteverwaltung (RBAC)
+**Scope:** Migration 006, roles/permissions/role_permissions, requirePermission, UI Rollen-Tab
+
+### Tasks
+- ✅ Migration 006: Tabellen roles, permissions, role_permissions
+- ✅ Migration 006: Seed – 3 Rollen, 25 Permissions, role_permissions
+- ✅ Migration 006: users.role VARCHAR → users.role_id FK
+- ✅ Migration 006: Admin-User mit sicherem Passwort (bcrypt cost 12)
+- ✅ routes/auth.js: Permissions beim Login in Session laden
+- ✅ middleware/auth.js: requirePermission(permName) Factory
+- ✅ routes/users.js: role_id statt role string, JOIN auf roles
+- ✅ routes/stammdaten.js: CRUD /roles, GET /permissions, PUT /roles/:id/permissions
+- ✅ AuthContext.jsx: hasPermission() Helper
+- ✅ App.jsx: Sidebar-Guards via hasPermission
+- ✅ BenutzerPage.jsx: dynamische Rollen aus API
+- ✅ StammdatenPage.jsx: Tab "Rollen & Rechte" mit PermissionModal (Checkbox-Grid)
+- ✅ api.js: neue RBAC-Methoden
+
+**Admin-Zugangsdaten:** username=`admin` (Passwort wurde separat kommuniziert)
+
+---
+
 ## Session 6 – 2026-03-18
 **Ziel:** Performance-Optimierung + Basis-Authentifizierung + Lokale Fonts
 **Scope:** CPU-Fixes, Debouncing, React.memo, Login/Rollen, @fontsource

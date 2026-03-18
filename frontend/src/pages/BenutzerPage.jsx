@@ -8,25 +8,31 @@ function UserModal({ user, onClose, onSaved }) {
     username: user?.username || '',
     display_name: user?.display_name || '',
     password: '',
-    role: user?.role || 'techniker',
+    role_id: user?.role_id || 2,
     is_active: user?.is_active ?? true,
   });
+  const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    api.getRoles().then(setRoles).catch(() => {});
+  }, []);
 
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
 
   const submit = async (e) => {
     e.preventDefault();
     if (!isEdit && !form.password) { setError('Passwort ist erforderlich'); return; }
+    if (form.password && form.password.length < 8) { setError('Passwort muss mindestens 8 Zeichen haben'); return; }
     setLoading(true); setError('');
     try {
       if (isEdit) {
-        const data = { display_name: form.display_name, role: form.role, is_active: form.is_active };
+        const data = { display_name: form.display_name, role_id: Number(form.role_id), is_active: form.is_active };
         if (form.password) data.password = form.password;
         await api.updateUser(user.user_id, data);
       } else {
-        await api.createUser({ username: form.username, password: form.password, display_name: form.display_name, role: form.role });
+        await api.createUser({ username: form.username, password: form.password, display_name: form.display_name, role_id: Number(form.role_id) });
       }
       onSaved();
     } catch (err) { setError(err.message); }
@@ -53,14 +59,15 @@ function UserModal({ user, onClose, onSaved }) {
             <input className="form-control" value={form.display_name} onChange={set('display_name')} />
           </div>
           <div className="form-group">
-            <label className="form-label">Passwort {isEdit ? '(leer = nicht ändern)' : '*'}</label>
-            <input className="form-control" type="password" value={form.password} onChange={set('password')} />
+            <label className="form-label">Passwort {isEdit ? '(leer = nicht ändern, min. 8 Zeichen)' : '* (min. 8 Zeichen)'}</label>
+            <input className="form-control" type="password" value={form.password} onChange={set('password')} autoComplete="new-password" />
           </div>
           <div className="form-group">
             <label className="form-label">Rolle</label>
-            <select className="form-control" value={form.role} onChange={set('role')}>
-              <option value="techniker">Techniker</option>
-              <option value="admin">Admin</option>
+            <select className="form-control" value={form.role_id} onChange={set('role_id')}>
+              {roles.map(r => (
+                <option key={r.role_id} value={r.role_id}>{r.label || r.name}</option>
+              ))}
             </select>
           </div>
           {isEdit && (
@@ -190,9 +197,9 @@ export default function BenutzerPage() {
                   <td>{u.display_name || <span className="text-muted">–</span>}</td>
                   <td>
                     <span className="badge" style={{
-                      background: u.role === 'admin' ? 'rgba(239,68,68,0.15)' : 'rgba(59,130,246,0.15)',
-                      color: u.role === 'admin' ? '#ef4444' : 'var(--accent)'
-                    }}>{u.role}</span>
+                      background: u.role === 'admin' ? 'rgba(239,68,68,0.15)' : u.role === 'readonly' ? 'rgba(100,116,139,0.15)' : 'rgba(59,130,246,0.15)',
+                      color: u.role === 'admin' ? '#ef4444' : u.role === 'readonly' ? '#64748b' : 'var(--accent)'
+                    }}>{u.role_label || u.role}</span>
                   </td>
                   <td>
                     <span style={{ color: u.is_active ? 'var(--success, #10b981)' : 'var(--text-muted)' }}>

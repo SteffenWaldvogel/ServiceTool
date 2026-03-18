@@ -37,7 +37,7 @@ const icons = {
 };
 
 function AppContent() {
-  const { user, loading, logout } = useAuth();
+  const { user, loading, logout, hasPermission } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
   const [unmatchedCount, setUnmatchedCount] = useState(0);
   const [showChangePw, setShowChangePw] = useState(false);
@@ -111,20 +111,20 @@ function AppContent() {
             </NavLink>
 
             <div className="nav-section">Verwaltung</div>
-            {user?.role === 'admin' && (
+            {hasPermission('stammdaten.manage') && (
               <NavLink to="/stammdaten" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
                 <NavIcon path={icons.stammdaten} />
                 Stammdaten
               </NavLink>
             )}
-            {user?.role === 'admin' && (
+            {hasPermission('system.view') && (
               <NavLink to="/system" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
                 <NavIcon path={icons.system} />
                 System
                 {unmatchedCount > 0 && <span className="nav-badge nav-badge-warn">{unmatchedCount}</span>}
               </NavLink>
             )}
-            {user?.role === 'admin' && (
+            {hasPermission('users.manage') && (
               <NavLink to="/benutzer" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
                 <NavIcon path={icons.benutzer} />
                 Benutzer
@@ -141,7 +141,7 @@ function AppContent() {
                 {user.display_name || user.username}
               </div>
               <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono, "IBM Plex Mono", monospace)' }}>
-                {user.role}
+                {user.role_label || user.role}
               </div>
             </div>
             <button className="btn btn-ghost btn-sm btn-icon" title="Passwort ändern" onClick={() => setShowChangePw(true)}>🔑</button>
@@ -163,9 +163,9 @@ function AppContent() {
             <Route path="/ersatzteile/:id" element={<ErsatzteileDetail />} />
             <Route path="/ansprechpartner" element={<AnsprechpartnerList />} />
             <Route path="/ansprechpartner/:id" element={<AnsprechpartnerDetail />} />
-            {user?.role === 'admin' && <Route path="/stammdaten" element={<StammdatenPage />} />}
-            {user?.role === 'admin' && <Route path="/system" element={<SystemPage />} />}
-            {user?.role === 'admin' && <Route path="/benutzer" element={<BenutzerPage />} />}
+            {hasPermission('stammdaten.manage') && <Route path="/stammdaten" element={<StammdatenPage />} />}
+            {hasPermission('system.view') && <Route path="/system" element={<SystemPage />} />}
+            {hasPermission('users.manage') && <Route path="/benutzer" element={<BenutzerPage />} />}
           </Routes>
         </main>
       </div>

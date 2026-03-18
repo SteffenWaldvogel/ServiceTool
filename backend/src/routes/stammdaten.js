@@ -425,4 +425,103 @@ router.delete('/status/:id', async (req, res) => {
   }
 });
 
+// ============================================================================
+// ROLLEN (RBAC)
+// ============================================================================
+
+// GET /api/stammdaten/roles
+router.get('/roles', async (req, res) => {
+  try {
+    const roles = await pool.query(`
+      SELECT r.role_id, r.name, r.label, r.is_system,
+             COUNT(u.user_id) FILTER (WHERE u.is_active = true) AS user_count
+      FROM roles r
+      LEFT JOIN users u ON u.role_id = r.role_id
+      GROUP BY r.role_id ORDER BY r.role_id
+    `);
+    const perms = await pool.query(`
+      SELECT rp.role_id, p.permission_id, p.name, p.label, p.category
+      FROM role_permissions rp
+      JOIN permissions p ON p.permission_id = rp.permission_id
+      ORDER BY p.category, p.name
+    `);
+    const permMap = {};
+    perms.rows.forEach(p => {
+      if (!permMap[p.role_id]) permMap[p.role_id] = [];
+      permMap[p.role_id].push({ permission_id: p.permission_id, name: p.name, label: p.label, category: p.category });
+    });
+    res.json(roles.rows.map(r => ({ ...r, permissions: permMap[r.role_id] || [] })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/stammdaten/roles
+router.post('/roles', async (req, res) => {
+  const { name, label } = req.body;
+  if (!name?.trim()) return res.status(400).json({ error: 'name ist erforderlich' });
+  try {
+    const result = await pool.query(
+      'INSERT INTO roles (name, label, is_system) VALUES ($1,$2,false) RETURNING *',
+      [name.trim(), label || null]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    if (isUniqueViolation(err)) return res.status(409).json({ error: 'Rollenname bereits vergeben' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/stammdaten/roles/:id  (nur label änderbar)
+router.put('/roles/:id', async (req, res) => {
+  const { label } = req.body;
+  try {
+    const result = await pool.query(
+      'UPDATE roles SET label=$1 WHERE role_id=$2 RETURNING *',
+      [label, req.params.id]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Rolle nicht gefunden' });
+    res.json(result.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE /api/stammdaten/roles/:id
+router.delete('/roles/:id', async (req, res) => {
+  try {
+    const role = await pool.query('SELECT * FROM roles WHERE role_id=$1', [req.params.id]);
+    if (!role.rows.length) return res.status(404).json({ error: 'Rolle nicht gefunden' });
+    if (role.rows[0].is_system) return res.status(409).json({ error: 'System-Rollen können nicht gelöscht werden' });
+    const users = await pool.query('SELECT 1 FROM users WHERE role_id=$1 AND is_active=true LIMIT 1', [req.params.id]);
+    if (users.rows.length) return res.status(409).json({ error: 'Rolle wird noch von aktiven Benutzern verwendet' });
+    await pool.query('DELETE FROM roles WHERE role_id=$1', [req.params.id]);
+    res.json({ deleted: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/stammdaten/permissions
+router.get('/permissions', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM permissions ORDER BY category, name');
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// PUT /api/stammdaten/roles/:id/permissions  (full replace)
+router.put('/roles/:id/permissions', async (req, res) => {
+  const { permission_ids } = req.body;
+  if (!Array.isArray(permission_ids)) return res.status(400).json({ error: 'permission_ids muss ein Array sein' });
+  try {
+    const role = await pool.query('SELECT * FROM roles WHERE role_id=$1', [req.params.id]);
+    if (!role.rows.length) return res.status(404).json({ error: 'Rolle nicht gefunden' });
+    if (role.rows[0].name === 'admin') return res.status(409).json({ error: 'Admin-Berechtigungen können nicht geändert werden' });
+    await pool.query('DELETE FROM role_permissions WHERE role_id=$1', [req.params.id]);
+    if (permission_ids.length > 0) {
+      const values = permission_ids.map((pid, i) => `($1, $${i + 2})`).join(',');
+      await pool.query(
+        `INSERT INTO role_permissions (role_id, permission_id) VALUES ${values} ON CONFLICT DO NOTHING`,
+        [req.params.id, ...permission_ids]
+      );
+    }
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;

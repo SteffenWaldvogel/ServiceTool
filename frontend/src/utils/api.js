@@ -183,6 +183,15 @@ export const api = {
   updateCustomFieldOption: (table, key, value, data) => request(`/custom-fields/options/${table}/${key}/${value}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCustomFieldOption: (table, key, value) => request(`/custom-fields/options/${table}/${key}/${value}`, { method: 'DELETE' }),
 
+  // ── RBAC ─────────────────────────────────────────────────────────────────
+  getRoles: () => request('/stammdaten/roles'),
+  createRole: (data) => request('/stammdaten/roles', { method: 'POST', body: JSON.stringify(data) }),
+  updateRole: (id, data) => request(`/stammdaten/roles/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteRole: (id) => request(`/stammdaten/roles/${id}`, { method: 'DELETE' }),
+  getPermissions: () => request('/stammdaten/permissions'),
+  updateRolePermissions: (id, permissionIds) =>
+    request(`/stammdaten/roles/${id}/permissions`, { method: 'PUT', body: JSON.stringify({ permission_ids: permissionIds }) }),
+
   // ── Dubletten-Matching ────────────────────────────────────────────────────
   matchKunden: (data) => request('/kunden/match', { method: 'POST', body: JSON.stringify(data) }),
   matchAnsprechpartner: (data) => request('/ansprechpartner/match', { method: 'POST', body: JSON.stringify(data) }),

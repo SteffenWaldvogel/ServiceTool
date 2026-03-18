@@ -409,6 +409,233 @@ function FreifelderTab() {
   );
 }
 
+// ── Rollen & Rechte Tab ────────────────────────────────────────────────────
+
+const CATEGORY_ORDER = ['Tickets', 'Kunden', 'Maschinen', 'Ersatzteile', 'Ansprechpartner', 'Verwaltung'];
+
+function PermissionModal({ role, allPermissions, onClose, onSaved }) {
+  const isAdmin = role.name === 'admin';
+  const initial = new Set((role.permissions || []).map(p => p.permission_id));
+  const [selected, setSelected] = useState(new Set(initial));
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const toggle = (pid) => {
+    if (isAdmin) return;
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(pid) ? next.delete(pid) : next.add(pid);
+      return next;
+    });
+  };
+
+  const save = async () => {
+    setLoading(true); setError('');
+    try {
+      await api.updateRolePermissions(role.role_id, [...selected]);
+      onSaved();
+      onClose();
+    } catch (err) { setError(err.message); }
+    finally { setLoading(false); }
+  };
+
+  const grouped = {};
+  allPermissions.forEach(p => {
+    const cat = p.category || 'Sonstige';
+    if (!grouped[cat]) grouped[cat] = [];
+    grouped[cat].push(p);
+  });
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 620, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+        <div className="modal-header">
+          <div className="modal-title">Berechtigungen: {role.label || role.name}</div>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
+        </div>
+        {isAdmin && (
+          <div style={{ padding: '8px 0 4px', color: 'var(--text-muted)', fontSize: 12 }}>
+            Admin hat alle Berechtigungen (nicht änderbar)
+          </div>
+        )}
+        {error && <div className="error-banner">{error}</div>}
+        <div style={{ overflowY: 'auto', flex: 1, paddingRight: 4 }}>
+          {CATEGORY_ORDER.filter(c => grouped[c]).concat(Object.keys(grouped).filter(c => !CATEGORY_ORDER.includes(c))).map(cat => (
+            <div key={cat} style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--accent)', marginBottom: 8 }}>{cat}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px' }}>
+                {(grouped[cat] || []).map(p => (
+                  <label key={p.permission_id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: isAdmin ? 'default' : 'pointer', opacity: isAdmin ? 0.7 : 1 }}>
+                    <input
+                      type="checkbox"
+                      checked={isAdmin || selected.has(p.permission_id)}
+                      onChange={() => toggle(p.permission_id)}
+                      disabled={isAdmin}
+                      style={{ width: 14, height: 14 }}
+                    />
+                    <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{p.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="modal-footer" style={{ marginTop: 12 }}>
+          <button className="btn btn-secondary" onClick={onClose}>Abbrechen</button>
+          {!isAdmin && (
+            <button className="btn btn-primary" onClick={save} disabled={loading}>
+              {loading ? 'Speichern…' : 'Speichern'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RolleModal({ role, onClose, onSaved }) {
+  const isEdit = !!role?.role_id;
+  const [form, setForm] = useState({ name: role?.name || '', label: role?.label || '' });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setLoading(true); setError('');
+    try {
+      if (isEdit) {
+        await api.updateRole(role.role_id, { label: form.label });
+      } else {
+        await api.createRole({ name: form.name, label: form.label });
+      }
+      onSaved();
+      onClose();
+    } catch (err) { setError(err.message); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="modal-header">
+          <div className="modal-title">{isEdit ? 'Rolle bearbeiten' : 'Neue Rolle'}</div>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
+        </div>
+        {error && <div className="error-banner">{error}</div>}
+        <form onSubmit={submit}>
+          {!isEdit && (
+            <div className="form-group">
+              <label className="form-label">Interner Name * (z.B. serviceleiter)</label>
+              <input className="form-control" value={form.name} onChange={set('name')} placeholder="lowercase, keine Leerzeichen" required />
+            </div>
+          )}
+          <div className="form-group">
+            <label className="form-label">Anzeigename</label>
+            <input className="form-control" value={form.label} onChange={set('label')} placeholder="z.B. Serviceleiter" />
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary" onClick={onClose}>Abbrechen</button>
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              {loading ? 'Speichern…' : isEdit ? 'Speichern' : 'Erstellen'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function RollenTab() {
+  const [roles, setRoles] = useState([]);
+  const [allPermissions, setAllPermissions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [roleModal, setRoleModal] = useState(null);
+  const [permModal, setPermModal] = useState(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    Promise.all([api.getRoles(), api.getPermissions()])
+      .then(([r, p]) => { setRoles(r); setAllPermissions(p); })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const deleteRole = async (role) => {
+    if (!confirm(`Rolle "${role.label || role.name}" wirklich löschen?`)) return;
+    try {
+      await api.deleteRole(role.role_id);
+      load();
+    } catch (err) { alert(err.message); }
+  };
+
+  if (loading) return <div className="loading"><div className="spinner" /> Lade…</div>;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+        <button className="btn btn-primary btn-sm" onClick={() => setRoleModal({})}>+ Neue Rolle</button>
+      </div>
+      <div className="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Anzeigename</th>
+              <th>Typ</th>
+              <th>Aktive Benutzer</th>
+              <th>Berechtigungen</th>
+              <th style={{ width: 100 }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {roles.map(role => (
+              <tr key={role.role_id}>
+                <td className="mono" style={{ fontSize: 12 }}>{role.name}</td>
+                <td style={{ fontWeight: 500 }}>{role.label || '–'}</td>
+                <td>
+                  {role.is_system
+                    ? <span className="badge" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}>System</span>
+                    : <span className="badge" style={{ background: 'rgba(59,130,246,0.12)', color: 'var(--accent)' }}>Benutzerdefiniert</span>}
+                </td>
+                <td className="mono" style={{ fontSize: 13 }}>{role.user_count}</td>
+                <td>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    {role.name === 'admin' ? 'Alle' : `${(role.permissions || []).length} von ${allPermissions.length}`}
+                  </span>
+                </td>
+                <td>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button className="btn btn-ghost btn-sm" title="Berechtigungen konfigurieren" onClick={() => setPermModal(role)}>
+                      Rechte
+                    </button>
+                    {!role.is_system && (
+                      <>
+                        <button className="btn btn-ghost btn-sm btn-icon" title="Bearbeiten" onClick={() => setRoleModal(role)}>✎</button>
+                        <button className="btn btn-ghost btn-sm btn-icon" title="Löschen" style={{ color: 'var(--danger)' }} onClick={() => deleteRole(role)}>✕</button>
+                      </>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {roleModal !== null && (
+        <RolleModal role={roleModal?.role_id ? roleModal : null} onClose={() => setRoleModal(null)} onSaved={load} />
+      )}
+      {permModal && (
+        <PermissionModal role={permModal} allPermissions={allPermissions} onClose={() => setPermModal(null)} onSaved={load} />
+      )}
+    </div>
+  );
+}
+
 // ── Maschinentypen Tab ─────────────────────────────────────────────────────
 
 function MaschinentypenTab() {
@@ -490,6 +717,7 @@ const TABS = [
   { id: 'status', label: 'Status' },
   { id: 'maschinentypen', label: 'Maschinentypen' },
   { id: 'freifelder', label: 'Freifelder' },
+  { id: 'rollen', label: 'Rollen & Rechte' },
 ];
 
 export default function StammdatenPage() {
@@ -929,6 +1157,9 @@ export default function StammdatenPage() {
 
       {/* ── Freifelder ── */}
       {activeTab === 'freifelder' && <FreifelderTab />}
+
+      {/* ── Rollen & Rechte ── */}
+      {activeTab === 'rollen' && <RollenTab />}
     </div>
   );
 }

@@ -8,6 +8,22 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [UNRELEASED]
 
+### Added (Session 7)
+- RBAC: Tabellen roles, permissions, role_permissions (Migration 006)
+- 3 System-Rollen: admin (25 Rechte), techniker (15 Rechte), readonly (6 Rechte)
+- 25 granulare Permissions in 6 Kategorien (Tickets, Kunden, Maschinen, Ersatzteile, Ansprechpartner, Verwaltung)
+- requirePermission(permName) Middleware-Factory
+- Login lädt Permissions in Session (Array von permission.name strings)
+- Admin-User mit sicherem bcrypt-Passwort (cost 12), kein Klartext im Code
+- Passwortlänge Minimum auf 8 Zeichen angehoben
+- users.js: role_id (FK) statt role VARCHAR
+- stammdaten.js: RBAC-Admin-Routen (roles CRUD, permissions, role-permissions)
+- AuthContext: hasPermission(perm) Helper, Admin-Shortcut
+- App.jsx: Sidebar-Guards via hasPermission statt role === 'admin'
+- BenutzerPage: dynamische Rollen-Dropdown (aus API)
+- StammdatenPage: neuer Tab "Rollen & Rechte" mit Checkbox-Grid pro Rolle
+- api.js: getRoles, createRole, updateRole, deleteRole, getPermissions, updateRolePermissions
+
 ### Added (Session 6)
 - Lokale Fonts: @fontsource/ibm-plex-sans + ibm-plex-mono (offline-fähig)
 - DB-Indizes für ticket, ticket_messages, ansprechpartner (Migration 004)
