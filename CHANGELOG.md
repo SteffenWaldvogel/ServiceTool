@@ -8,6 +8,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [UNRELEASED]
 
+### Added (Session 16)
+- Sentry: optionales Fehler-Monitoring für Frontend (@sentry/react) und Backend (@sentry/node)
+- Sentry wird nur initialisiert wenn SENTRY_DSN / VITE_SENTRY_DSN gesetzt – kein Pflichtfeld
+- Bulk-Aktionen: Checkboxen in Ticket-Liste für Mehrfachauswahl
+- Bulk-Aktionsleiste: Status setzen + Techniker zuweisen für alle ausgewählten Tickets
+- PUT /api/tickets/bulk – Bulk-Update Endpoint
+- Auswahl wird bei Filter-, Sort- und Seitenwechsel automatisch geleert
+
 ### Added (Session 15)
 - SLA-Tracking: `response_time_h` auf `service_priority`-Tabelle (Migration 008)
 - Standardwerte: Standard=72h, Premium=24h, VIP=4h

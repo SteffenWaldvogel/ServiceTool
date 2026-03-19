@@ -55,6 +55,8 @@ export const api = {
     request(`/tickets/${ticketnr}/reply`, { method: 'POST', body: JSON.stringify(data) }),
   linkMessage: (ticketnr, messageId) =>
     request(`/tickets/${ticketnr}/link-message`, { method: 'POST', body: JSON.stringify({ message_id: messageId }) }),
+  bulkUpdateTickets: (data) =>
+    request('/tickets/bulk', { method: 'PUT', body: JSON.stringify(data) }),
   exportTickets: (params = {}) => {
     const q = new URLSearchParams(params).toString();
     return fetch(`${BASE}/tickets/export${q ? '?' + q : ''}`, {

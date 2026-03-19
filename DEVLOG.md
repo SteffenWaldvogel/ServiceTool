@@ -4,6 +4,24 @@ Chronological log of development sessions for the Service Tool project.
 
 ---
 
+## Session 16 – 2026-03-19
+**Ziel:** Sentry Fehler-Monitoring + Bulk-Aktionen in Ticket-Liste
+**Scope:** server.js, main.jsx, tickets.js, api.js, TicketList.jsx
+
+### Tasks
+- ✅ @sentry/node installiert (backend), @sentry/react installiert (frontend)
+- ✅ server.js: Sentry init + errorHandler (optional via SENTRY_DSN)
+- ✅ main.jsx: Sentry init (optional via VITE_SENTRY_DSN)
+- ✅ .env.example: SENTRY_DSN ergänzt (backend + frontend)
+- ✅ tickets.js: PUT /api/tickets/bulk (vor /export und /api/tickets/export)
+- ✅ api.js: bulkUpdateTickets()
+- ✅ TicketList: selected state, toggleSelect, toggleAll, handleBulkApply
+- ✅ TicketList: Bulk-Aktionsleiste (Status + Zuweisen + Anwenden/Abbrechen)
+- ✅ TicketList: Checkbox-Spalte in Header + Zeilen (stopPropagation)
+- ✅ TicketList: Auswahl bei Filter/Sort/Seite leeren
+
+---
+
 ## Session 15 – 2026-03-19
 **Ziel:** SLA-Tracking basierend auf Service-Priority
 **Scope:** Migration 008, tickets.js, lookup.js, stammdaten.js, helpers.js, TicketList, TicketDetail, Dashboard, StammdatenPage

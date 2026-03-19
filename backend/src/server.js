@@ -1,4 +1,14 @@
 require('dotenv').config();
+
+// Sentry (optional – nur wenn SENTRY_DSN gesetzt)
+if (process.env.SENTRY_DSN) {
+  const Sentry = require('@sentry/node');
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+  });
+}
+
 const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
@@ -93,6 +103,12 @@ app.use('/api/system', requireAdmin, systemRouter);
 app.use('/api/custom-fields', requireAdmin, customFieldsAdminRouter);
 app.use('/api/ansprechpartner', ansprechpartnerRouter);
 app.use('/api/users', requireAdmin, usersRouter);
+
+// Sentry Error-Handler (muss vor eigenem Error-Handler stehen)
+if (process.env.SENTRY_DSN) {
+  const Sentry = require('@sentry/node');
+  app.use(Sentry.Handlers.errorHandler());
+}
 
 // Error Handler – keine Stack-Traces in Produktion
 app.use((err, req, res, next) => {

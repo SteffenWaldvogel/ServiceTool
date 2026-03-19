@@ -282,6 +282,10 @@ export default function TicketList() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [myTickets, setMyTickets] = useState(false);
+  const [selected, setSelected] = useState(new Set());
+  const [bulkStatus, setBulkStatus] = useState('');
+  const [bulkAssigned, setBulkAssigned] = useState('');
+  const [users, setUsers] = useState([]);
   const [filters, setFilters] = useState({ search: '', status_id: '', kritikalitaet_id: '', kategorie_id: '', is_terminal: '', date_from: '', date_to: '' });
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [sort, setSort] = useState({ by: 'created_at', dir: 'desc' });
@@ -329,7 +333,30 @@ export default function TicketList() {
     api.getStatus().then(setStatusList).catch(console.error);
     api.getKritikalitaeten().then(setKritList).catch(console.error);
     api.getKategorien().then(setKategorienList).catch(console.error);
+    api.getLookupUsers().then(setUsers).catch(console.error);
   }, []);
+
+  const toggleSelect = (nr) =>
+    setSelected(s => { const n = new Set(s); n.has(nr) ? n.delete(nr) : n.add(nr); return n; });
+
+  const toggleAll = () =>
+    setSelected(s => s.size === tickets.length ? new Set() : new Set(tickets.map(t => t.ticketnr)));
+
+  const handleBulkApply = async () => {
+    if (selected.size === 0) return;
+    const data = { ticketnrs: [...selected] };
+    if (bulkStatus) data.status_id = bulkStatus;
+    if (bulkAssigned !== '') data.assigned_to = bulkAssigned === 'null' ? null : bulkAssigned;
+    try {
+      await api.bulkUpdateTickets(data);
+      setSelected(new Set());
+      setBulkStatus('');
+      setBulkAssigned('');
+      load();
+    } catch (err) {
+      console.error('Bulk-Update fehlgeschlagen:', err);
+    }
+  };
 
   const handleExport = async () => {
     try {
@@ -357,11 +384,13 @@ export default function TicketList() {
   const handleFilterChange = (key, value) => {
     setFilters(f => ({ ...f, [key]: value }));
     setPage(p => ({ ...p, offset: 0 }));
+    setSelected(new Set());
   };
 
   const handleSort = (field) => {
     setSort(s => ({ by: field, dir: s.by === field && s.dir === 'asc' ? 'desc' : 'asc' }));
     setPage(p => ({ ...p, offset: 0 }));
+    setSelected(new Set());
   };
 
   const filterConfig = [
@@ -410,10 +439,57 @@ export default function TicketList() {
           <p>Keine Tickets gefunden</p>
         </div>
       ) : (
+        {selected.size > 0 && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '8px 12px', marginBottom: 8,
+            background: 'var(--accent-dim)', border: '1px solid var(--accent)',
+            borderRadius: 6, fontSize: 13
+          }}>
+            <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{selected.size} ausgewählt</span>
+            <select
+              className="form-control"
+              style={{ width: 160, height: 30, fontSize: 12 }}
+              value={bulkStatus}
+              onChange={e => setBulkStatus(e.target.value)}
+            >
+              <option value="">— Status setzen —</option>
+              {statusList.map(s => <option key={s.status_id} value={s.status_id}>{s.status_name}</option>)}
+            </select>
+            <select
+              className="form-control"
+              style={{ width: 180, height: 30, fontSize: 12 }}
+              value={bulkAssigned}
+              onChange={e => setBulkAssigned(e.target.value)}
+            >
+              <option value="">— Zuweisen —</option>
+              <option value="null">— Zuweisung aufheben —</option>
+              {users.map(u => <option key={u.user_id} value={u.user_id}>{u.display_name}</option>)}
+            </select>
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={!bulkStatus && bulkAssigned === ''}
+              onClick={handleBulkApply}
+            >
+              Anwenden
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setSelected(new Set())}>
+              Abbrechen
+            </button>
+          </div>
+        )}
+
         <div className="table-wrapper">
           <table>
             <thead>
               <tr>
+                <th style={{ width: 36 }}>
+                  <input
+                    type="checkbox"
+                    checked={tickets.length > 0 && selected.size === tickets.length}
+                    onChange={toggleAll}
+                  />
+                </th>
                 <th><SortableHeader field="ticketnr" label="Ticket-Nr." sort={sort} onSort={handleSort} /></th>
                 <th>Betreff</th>
                 <th><SortableHeader field="kunde" label="Kunde" sort={sort} onSort={handleSort} /></th>
@@ -428,6 +504,13 @@ export default function TicketList() {
             <tbody>
               {tickets.map(t => (
                 <tr key={t.ticketnr} onClick={() => navigate(`/tickets/${t.ticketnr}`)}>
+                  <td onClick={e => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(t.ticketnr)}
+                      onChange={() => toggleSelect(t.ticketnr)}
+                    />
+                  </td>
                   <td>
                     <span className="mono" style={{ color: 'var(--accent)', fontSize: 12 }}>#{highlight(String(t.ticketnr), filters.search)}</span>
                   </td>
@@ -503,11 +586,11 @@ export default function TicketList() {
           Gesamt: {total} · Seite {Math.floor(page.offset / page.limit) + 1} von {Math.ceil(total / page.limit) || 1}
         </span>
         <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-          <button className="btn btn-ghost btn-sm" disabled={page.offset === 0} onClick={() => setPage(p => ({ ...p, offset: 0 }))}>«</button>
-          <button className="btn btn-ghost btn-sm" disabled={page.offset === 0} onClick={() => setPage(p => ({ ...p, offset: Math.max(0, p.offset - p.limit) }))}>‹</button>
-          <button className="btn btn-ghost btn-sm" disabled={page.offset + page.limit >= total} onClick={() => setPage(p => ({ ...p, offset: p.offset + p.limit }))}>›</button>
-          <button className="btn btn-ghost btn-sm" disabled={page.offset + page.limit >= total} onClick={() => setPage(p => ({ ...p, offset: Math.floor((total - 1) / p.limit) * p.limit }))}>»</button>
-          <select className="form-control" style={{ width: 80, height: 30, fontSize: 12 }} value={page.limit} onChange={e => setPage({ limit: parseInt(e.target.value), offset: 0 })}>
+          <button className="btn btn-ghost btn-sm" disabled={page.offset === 0} onClick={() => { setPage(p => ({ ...p, offset: 0 })); setSelected(new Set()); }}>«</button>
+          <button className="btn btn-ghost btn-sm" disabled={page.offset === 0} onClick={() => { setPage(p => ({ ...p, offset: Math.max(0, p.offset - p.limit) })); setSelected(new Set()); }}>‹</button>
+          <button className="btn btn-ghost btn-sm" disabled={page.offset + page.limit >= total} onClick={() => { setPage(p => ({ ...p, offset: p.offset + p.limit })); setSelected(new Set()); }}>›</button>
+          <button className="btn btn-ghost btn-sm" disabled={page.offset + page.limit >= total} onClick={() => { setPage(p => ({ ...p, offset: Math.floor((total - 1) / p.limit) * p.limit })); setSelected(new Set()); }}>»</button>
+          <select className="form-control" style={{ width: 80, height: 30, fontSize: 12 }} value={page.limit} onChange={e => { setPage({ limit: parseInt(e.target.value), offset: 0 }); setSelected(new Set()); }}>
             <option value={25}>25</option>
             <option value={50}>50</option>
             <option value={100}>100</option>

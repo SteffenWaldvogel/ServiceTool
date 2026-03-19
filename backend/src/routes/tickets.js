@@ -112,6 +112,42 @@ router.post('/unmatched/:id/assign', async (req, res) => {
   }
 });
 
+// PUT /api/tickets/bulk – Bulk-Update für mehrere Tickets
+router.put('/bulk', async (req, res) => {
+  const { ticketnrs, status_id, assigned_to } = req.body;
+  if (!Array.isArray(ticketnrs) || ticketnrs.length === 0)
+    return res.status(400).json({ error: 'ticketnrs ist erforderlich' });
+  if (!status_id && assigned_to === undefined)
+    return res.status(400).json({ error: 'Mindestens status_id oder assigned_to angeben' });
+
+  try {
+    const sets = [];
+    const params = [];
+
+    if (status_id) {
+      params.push(status_id);
+      sets.push(`status_id = $${params.length}`);
+    }
+    if (assigned_to !== undefined) {
+      params.push(assigned_to);
+      sets.push(`assigned_to = $${params.length}`);
+    }
+
+    const nrPlaceholders = ticketnrs.map((_, i) => `$${params.length + i + 1}`);
+    ticketnrs.forEach(nr => params.push(nr));
+
+    const result = await pool.query(
+      `UPDATE ticket SET ${sets.join(', ')}
+       WHERE ticketnr IN (${nrPlaceholders.join(',')})
+       RETURNING ticketnr`,
+      params
+    );
+    res.json({ updated: result.rowCount, ticketnrs: result.rows.map(r => r.ticketnr) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/tickets/export – gleiche Filter wie GET /, ohne Pagination, CSV-Output
 router.get('/export', async (req, res) => {
   try {
