@@ -439,6 +439,7 @@ export default function TicketList() {
           <p>Keine Tickets gefunden</p>
         </div>
       ) : (
+        <>
         {selected.size > 0 && (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8,
@@ -578,6 +579,7 @@ export default function TicketList() {
             </tbody>
           </table>
         </div>
+      </>
       )}
 
       {/* Pagination */}
