@@ -331,6 +331,29 @@ export default function TicketList() {
     api.getKategorien().then(setKategorienList).catch(console.error);
   }, []);
 
+  const handleExport = async () => {
+    try {
+      const params = {};
+      if (debouncedSearch) params.search = debouncedSearch;
+      if (filters.status_id) params.status_id = filters.status_id;
+      if (filters.kritikalitaet_id) params.kritikalitaet_id = filters.kritikalitaet_id;
+      if (filters.kategorie_id) params.kategorie_id = filters.kategorie_id;
+      if (filters.is_terminal) params.is_terminal = filters.is_terminal;
+      if (filters.date_from) params.date_from = filters.date_from;
+      if (filters.date_to) params.date_to = filters.date_to;
+      if (myTickets && user?.user_id) params.assigned_to = user.user_id;
+      const blob = await api.exportTickets(params);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `tickets_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export fehlgeschlagen:', err);
+    }
+  };
+
   const handleFilterChange = (key, value) => {
     setFilters(f => ({ ...f, [key]: value }));
     setPage(p => ({ ...p, offset: 0 }));
@@ -366,6 +389,7 @@ export default function TicketList() {
           >
             {myTickets ? '👤 Meine Tickets' : '👤 Meine Tickets'}
           </button>
+          <button className="btn btn-secondary" onClick={handleExport}>↓ CSV</button>
           <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ Neues Ticket</button>
         </div>
       </div>

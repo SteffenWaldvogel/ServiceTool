@@ -55,6 +55,15 @@ export const api = {
     request(`/tickets/${ticketnr}/reply`, { method: 'POST', body: JSON.stringify(data) }),
   linkMessage: (ticketnr, messageId) =>
     request(`/tickets/${ticketnr}/link-message`, { method: 'POST', body: JSON.stringify({ message_id: messageId }) }),
+  exportTickets: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return fetch(`${BASE}/tickets/export${q ? '?' + q : ''}`, {
+      credentials: 'include',
+    }).then(res => {
+      if (!res.ok) throw new Error('Export fehlgeschlagen');
+      return res.blob();
+    });
+  },
   getUnmatchedEmails: () => request('/tickets/unmatched'),
   assignUnmatchedEmail: (unmatchedId, ticketnr) =>
     request(`/tickets/unmatched/${unmatchedId}/assign`, { method: 'POST', body: JSON.stringify({ ticketnr }) }),

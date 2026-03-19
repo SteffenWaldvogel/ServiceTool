@@ -4,6 +4,17 @@ Chronological log of development sessions for the Service Tool project.
 
 ---
 
+## Session 14 – 2026-03-19
+**Ziel:** CSV-Export für Ticket-Liste mit aktiven Filtern
+**Scope:** tickets.js, api.js, TicketList.jsx
+
+### Tasks
+- ✅ tickets.js: GET /api/tickets/export (vor /:id, gleiche Filter, LIMIT 5000, UTF-8 BOM)
+- ✅ api.js: exportTickets() – fetch als Blob statt JSON
+- ✅ TicketList.jsx: handleExport() mit Blob-Download + „↓ CSV"-Button im Header
+
+---
+
 ## Session 13 – 2026-03-19
 **Ziel:** Volltextsuche – alle relevanten Felder + Highlight + Debounce
 **Scope:** tickets.js, TicketList.jsx

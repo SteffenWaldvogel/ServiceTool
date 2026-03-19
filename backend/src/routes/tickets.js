@@ -108,6 +108,70 @@ router.post('/unmatched/:id/assign', async (req, res) => {
   }
 });
 
+// GET /api/tickets/export – gleiche Filter wie GET /, ohne Pagination, CSV-Output
+router.get('/export', async (req, res) => {
+  try {
+    const { conditions, params } = buildQuery(req.query, TICKET_FILTERS, TICKET_SORTS);
+
+    if (req.query.search) {
+      params.push(`%${req.query.search}%`);
+      const p = params.length;
+      conditions.push(`(
+        k.name_kunde               ILIKE $${p}
+        OR t.ticketnr::text        ILIKE $${p}
+        OR m.maschinennr           ILIKE $${p}
+        OR ap.ansprechpartner_name ILIKE $${p}
+        OR EXISTS (
+          SELECT 1 FROM ticket_messages tm
+          WHERE tm.ticketnr = t.ticketnr AND tm.message ILIKE $${p}
+        )
+      )`);
+    }
+
+    const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+
+    const result = await pool.query(
+      `${TICKET_SELECT} ${where} ORDER BY t.erstellt_am DESC LIMIT 5000`,
+      params
+    );
+
+    const escape = (v) => {
+      if (v == null) return '';
+      const s = String(v).replace(/"/g, '""');
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s}"` : s;
+    };
+
+    const headers = [
+      'Ticket-Nr.', 'Betreff', 'Kunde', 'Maschinennr.', 'Ansprechpartner',
+      'Status', 'Kritikalität', 'Kategorie', 'Zugewiesen an',
+      'Erstellt von', 'Erstellt am', 'Geändert am'
+    ];
+
+    const rows = result.rows.map(t => [
+      t.ticketnr,
+      t.betreff ? t.betreff.split('\n')[0] : '',
+      t.kunden_name,
+      t.maschine_maschinennr,
+      t.ap_name,
+      t.status_name,
+      t.kritikalitaet_name,
+      t.kategorie_name,
+      t.assigned_display_name,
+      t.erstellt_von,
+      t.erstellt_am ? new Date(t.erstellt_am).toLocaleDateString('de-DE') : '',
+      t.geändert_am ? new Date(t.geändert_am).toLocaleDateString('de-DE') : '',
+    ].map(escape).join(','));
+
+    const csv = [headers.join(','), ...rows].join('\r\n');
+    const date = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="tickets_${date}.csv"`);
+    res.send('\uFEFF' + csv);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/tickets
 router.get('/', async (req, res) => {
   try {

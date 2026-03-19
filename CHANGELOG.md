@@ -8,6 +8,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [UNRELEASED]
 
+### Added (Session 14)
+- CSV-Export: Button „↓ CSV" in Ticket-Liste exportiert aktuelle Filterauswahl
+- GET /api/tickets/export – gleiche Filter wie Liste, max. 5000 Zeilen, UTF-8 BOM für Excel
+- Felder: Ticket-Nr., Betreff, Kunde, Maschinennr., Ansprechpartner, Status, Kritikalität, Kategorie, Zugewiesen, Erstellt von, Erstellt am, Geändert am
+
 ### Added (Session 13)
 - Volltextsuche: Suche trifft jetzt Nachrichten, Maschinennummer und Ansprechpartner-Name (zusätzlich zu Kunde + Ticket-Nr.)
 - Highlight: Treffer in Ticket-Nr., Betreff und Kundenname werden gelb hervorgehoben
