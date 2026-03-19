@@ -15,7 +15,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: |
             backend/package-lock.json
@@ -39,7 +39,7 @@ jobs:
 
       - name: Smoke-Test Backend
         env:
-          SESSION_SECRET: ${{ secrets.SESSION_SECRET || 'ci-dummy-secret-min64chars-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' }}
+          SESSION_SECRET: ci-dummy-secret-64chars-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
           DB_HOST: localhost
           DB_PORT: 5432
           DB_NAME: servicetickets
@@ -50,10 +50,9 @@ jobs:
           PORT: 3001
         run: |
           cd backend
-          # .env aus Example erstellen und CI-Werte eintragen
           cp .env.example .env
-          echo "SESSION_SECRET=${SESSION_SECRET}" >> .env
+          echo "SESSION_SECRET=ci-dummy-secret-64chars-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" >> .env
+          echo "DB_PASSWORD=postgres" >> .env
           echo "NODE_ENV=test" >> .env
-          echo "CORS_ORIGIN=${CORS_ORIGIN}" >> .env
-          # Server starten (schlaegt fehl wegen DB, aber Startup-Code wird geprueft)
-          timeout 8 node src/server.js 2>&1 | head -30 || true
+          echo "CORS_ORIGIN=http://localhost:5173" >> .env
+          timeout 8 node src/server.js || true
