@@ -4,6 +4,19 @@ Chronological log of development sessions for the Service Tool project.
 
 ---
 
+## Session 13 – 2026-03-19
+**Ziel:** Volltextsuche – alle relevanten Felder + Highlight + Debounce
+**Scope:** tickets.js, TicketList.jsx
+
+### Tasks
+- ✅ tickets.js: Suche erweitert auf ticket_messages (EXISTS), maschinennr, ansprechpartner_name
+- ✅ tickets.js: COUNT-Query ergänzt um LEFT JOIN maschine + ansprechpartner
+- ✅ TicketList.jsx: highlight()-Funktion (Regex, gelbe Mark)
+- ✅ TicketList.jsx: Debounce 300ms via useEffect + debouncedSearch-State
+- ✅ TicketList.jsx: Ticket-Nr., Betreff, Kundenname mit Highlight
+
+---
+
 ## Session 12 – 2026-03-19
 **Ziel:** Deployment-Setup (PM2 + Nginx + Backup + CI/CD)
 **Scope:** ecosystem.config.js, nginx/, scripts/, docs/, .github/workflows/ci.yml

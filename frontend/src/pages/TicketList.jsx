@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../utils/api';
 import { getKritColor, parseKategorie } from '../utils/helpers';
@@ -6,6 +6,18 @@ import { useAuth } from '../context/AuthContext';
 import QuickCreate from '../components/QuickCreate';
 import FilterBar from '../components/FilterBar';
 import SortableHeader from '../components/SortableHeader';
+
+function highlight(text, query) {
+  if (!query || !text) return text;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`(${escaped})`, 'gi');
+  const parts = String(text).split(regex);
+  return parts.map((part, i) =>
+    regex.test(part)
+      ? <mark key={i} style={{ background: '#f59e0b33', color: '#f59e0b', borderRadius: 2, padding: '0 2px' }}>{part}</mark>
+      : part
+  );
+}
 
 function CreateTicketModal({ onClose, onCreated }) {
   const [form, setForm] = useState({
@@ -271,6 +283,7 @@ export default function TicketList() {
   const [showCreate, setShowCreate] = useState(false);
   const [myTickets, setMyTickets] = useState(false);
   const [filters, setFilters] = useState({ search: '', status_id: '', kritikalitaet_id: '', kategorie_id: '', is_terminal: '', date_from: '', date_to: '' });
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [sort, setSort] = useState({ by: 'created_at', dir: 'desc' });
   const [page, setPage] = useState({ limit: 25, offset: 0 });
   const [statusList, setStatusList] = useState([]);
@@ -278,10 +291,16 @@ export default function TicketList() {
   const [kategorienList, setKategorienList] = useState([]);
   const navigate = useNavigate();
 
+  // Debounce Suche: API-Request erst 300ms nach letztem Tastendruck
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(filters.search), 300);
+    return () => clearTimeout(t);
+  }, [filters.search]);
+
   const load = useCallback(() => {
     setLoading(true);
     const params = {};
-    if (filters.search) params.search = filters.search;
+    if (debouncedSearch) params.search = debouncedSearch;
     if (filters.status_id) params.status_id = filters.status_id;
     if (filters.kritikalitaet_id) params.kritikalitaet_id = filters.kritikalitaet_id;
     if (filters.kategorie_id) params.kategorie_id = filters.kategorie_id;
@@ -302,7 +321,7 @@ export default function TicketList() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [filters, sort, page, myTickets, user]);
+  }, [filters.status_id, filters.kritikalitaet_id, filters.kategorie_id, filters.is_terminal, filters.date_from, filters.date_to, debouncedSearch, sort, page, myTickets, user]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -385,14 +404,16 @@ export default function TicketList() {
               {tickets.map(t => (
                 <tr key={t.ticketnr} onClick={() => navigate(`/tickets/${t.ticketnr}`)}>
                   <td>
-                    <span className="mono" style={{ color: 'var(--accent)', fontSize: 12 }}>#{t.ticketnr}</span>
+                    <span className="mono" style={{ color: 'var(--accent)', fontSize: 12 }}>#{highlight(String(t.ticketnr), filters.search)}</span>
                   </td>
                   <td style={{ maxWidth: 280 }}>
                     <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {t.betreff || <span className="text-muted">(kein Betreff)</span>}
+                      {t.betreff
+                        ? highlight(t.betreff.split('\n')[0], filters.search)
+                        : <span className="text-muted">(kein Betreff)</span>}
                     </span>
                   </td>
-                  <td>{t.kunden_name || <span className="text-muted">–</span>}</td>
+                  <td>{t.kunden_name ? highlight(t.kunden_name, filters.search) : <span className="text-muted">–</span>}</td>
                   <td>
                     {t.kategorie_name ? (() => {
                       const { typ, level } = parseKategorie(t.kategorie_name);

@@ -113,11 +113,21 @@ router.get('/', async (req, res) => {
   try {
     const { conditions, params, orderBy, limit, offset } = buildQuery(req.query, TICKET_FILTERS, TICKET_SORTS);
 
-    // Handle search specially: ILIKE on name_kunde OR ticketnr
+    // Volltextsuche: Kunde, Ticket-Nr., Maschinennr., Ansprechpartner, Nachrichten
     if (req.query.search) {
       params.push(`%${req.query.search}%`);
       const p = params.length;
-      conditions.push(`(k.name_kunde ILIKE $${p} OR t.ticketnr::text ILIKE $${p})`);
+      conditions.push(`(
+        k.name_kunde             ILIKE $${p}
+        OR t.ticketnr::text      ILIKE $${p}
+        OR m.maschinennr         ILIKE $${p}
+        OR ap.ansprechpartner_name ILIKE $${p}
+        OR EXISTS (
+          SELECT 1 FROM ticket_messages tm
+          WHERE tm.ticketnr = t.ticketnr
+            AND tm.message ILIKE $${p}
+        )
+      )`);
     }
 
     const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
@@ -129,6 +139,8 @@ router.get('/', async (req, res) => {
        LEFT JOIN status s ON t.status_id = s.status_id
        LEFT JOIN kunden k ON t.ticket_kundennummer = k.kundennummer
        LEFT JOIN kritikalität kr ON t.kritikalität_id = kr.kritikalität_id
+       LEFT JOIN maschine m ON t.ticket_maschinenid = m.maschinenid
+       LEFT JOIN ansprechpartner ap ON t.ticket_ansprechpartnerid = ap.ansprechpartnerid
        ${where}`,
       params
     );

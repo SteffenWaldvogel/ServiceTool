@@ -8,6 +8,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [UNRELEASED]
 
+### Added (Session 13)
+- Volltextsuche: Suche trifft jetzt Nachrichten, Maschinennummer und Ansprechpartner-Name (zusätzlich zu Kunde + Ticket-Nr.)
+- Highlight: Treffer in Ticket-Nr., Betreff und Kundenname werden gelb hervorgehoben
+- Debounce: Suchfeld feuert API-Request erst 300ms nach letztem Tastendruck
+
 ### Added (Session 12)
 - PM2-Konfiguration (`ecosystem.config.js`) für Produktionsbetrieb
 - Nginx-Konfiguration (`nginx/nginx.conf`): Reverse Proxy + SPA-Fallback + HTTPS-Vorlage
