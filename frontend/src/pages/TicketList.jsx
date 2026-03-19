@@ -40,8 +40,8 @@ function CreateTicketModal({ onClose, onCreated }) {
       api.getMaschinentypen(),
       api.getMaschinen()
     ]).then(([status, kategorien, kritikalitaeten, kunden, abteilungen, positionen, maschinentypen, maschinen]) => {
-      setLookup({ status, kategorien, kritikalitaeten, kunden, abteilungen, positionen, maschinentypen });
-      setMaschinen(maschinen);
+      setLookup({ status, kategorien, kritikalitaeten, kunden: kunden.data || kunden, abteilungen, positionen, maschinentypen });
+      setMaschinen(maschinen.data || maschinen);
       const offen = status.find(s => s.status_name === 'Offen');
       if (offen) setForm(f => ({ ...f, status_id: String(offen.status_id) }));
     }).catch(console.error);

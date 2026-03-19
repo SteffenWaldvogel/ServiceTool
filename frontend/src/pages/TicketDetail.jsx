@@ -158,8 +158,8 @@ export default function TicketDetail() {
       api.getLookupUsers()
     ]).then(([t, status, kategorien, kritikalitaeten, kunden, mlist, users]) => {
       setTicket(t);
-      setLookup({ status, kategorien, kritikalitaeten, kunden, users });
-      setMaschinen(mlist);
+      setLookup({ status, kategorien, kritikalitaeten, kunden: kunden.data || kunden, users });
+      setMaschinen(mlist.data || mlist);
       if (t.ticket_kundennummer) {
         api.getKunde(t.ticket_kundennummer)
           .then(k => { setKunde(k); setKundenAP(k.ansprechpartner || []); })
