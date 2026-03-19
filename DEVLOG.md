@@ -4,6 +4,23 @@ Chronological log of development sessions for the Service Tool project.
 
 ---
 
+## Session 15 – 2026-03-19
+**Ziel:** SLA-Tracking basierend auf Service-Priority
+**Scope:** Migration 008, tickets.js, lookup.js, stammdaten.js, helpers.js, TicketList, TicketDetail, Dashboard, StammdatenPage
+
+### Tasks
+- ✅ Migration 008: response_time_h auf service_priority, Standardwerte (Standard=72h, Premium=24h, VIP=4h)
+- ✅ tickets.js: TICKET_SELECT + JOIN service_priority (sla_priority_name, sla_response_time_h)
+- ✅ lookup.js: sla_overdue COUNT in ticketStats (JOIN kunden + service_priority)
+- ✅ stammdaten.js: response_time_h in GET SELECT + PUT UPDATE
+- ✅ helpers.js: getSlaStatus() + getSlaLabel()
+- ✅ TicketList: SLA-Spalte mit Farb-Badge (warning=gelb, overdue=rot)
+- ✅ TicketDetail: SLA-Block in Ticket-Feldern (Farbe + Icon + Zeit)
+- ✅ Dashboard: Stat-Tile „SLA Überfällig"
+- ✅ StammdatenPage: response_time_h Feld im Modal + Spalte in Tabelle
+
+---
+
 ## Session 14 – 2026-03-19
 **Ziel:** CSV-Export für Ticket-Liste mit aktiven Filtern
 **Scope:** tickets.js, api.js, TicketList.jsx

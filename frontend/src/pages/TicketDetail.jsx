@@ -5,7 +5,7 @@ import CustomFieldsSection from '../components/CustomFieldsSection';
 import MessageThread from '../components/MessageThread';
 import ReplyBox from '../components/ReplyBox';
 
-import { getKritColor } from '../utils/helpers';
+import { getKritColor, getSlaStatus, getSlaLabel } from '../utils/helpers';
 
 function EditField({ label, value, editValue, type = 'text', options, onSave, nullable }) {
   const [editing, setEditing] = useState(false);
@@ -346,6 +346,20 @@ export default function TicketDetail() {
                 <div className="field-val text-muted">{new Date(ticket.geändert_am).toLocaleString('de-DE')}</div>
               </div>
             )}
+            {ticket.sla_response_time_h && !ticket.is_terminal && (() => {
+              const slaStatus = getSlaStatus(ticket);
+              const slaLabel = getSlaLabel(ticket);
+              const color = slaStatus === 'overdue' ? '#ef4444' : slaStatus === 'warning' ? '#f59e0b' : '#10b981';
+              return (
+                <div className="field-row">
+                  <div className="field-key">SLA</div>
+                  <div className="field-val" style={{ color, fontSize: 12, fontWeight: 500 }}>
+                    {slaStatus === 'overdue' ? '⚠ ' : slaStatus === 'warning' ? '◔ ' : '✓ '}
+                    {slaLabel}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
 

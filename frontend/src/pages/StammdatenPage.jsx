@@ -865,6 +865,7 @@ export default function StammdatenPage() {
               { key: 'service_priority_id', label: 'ID' },
               { key: 'service_priority_name', label: 'Name' },
               { key: 'priority_order', label: 'Reihenfolge' },
+              { key: 'response_time_h', label: 'SLA (h)' },
               { key: 'service_priority_beschreibung', label: 'Beschreibung' },
             ]}
             rows={spRows}
@@ -877,6 +878,7 @@ export default function StammdatenPage() {
                 <td className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}>{row.service_priority_id}</td>
                 <td style={{ fontWeight: 500 }}>{row.service_priority_name}</td>
                 <td className="mono" style={{ fontSize: 12 }}>{row.priority_order}</td>
+                <td className="mono" style={{ fontSize: 12 }}>{row.response_time_h != null ? `${row.response_time_h}h` : '–'}</td>
                 <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{row.service_priority_beschreibung || '–'}</td>
               </>
             )}
@@ -887,6 +889,7 @@ export default function StammdatenPage() {
               fields={[
                 { key: 'service_priority_name', label: 'Name', required: true, placeholder: 'z.B. VIP Plus' },
                 { key: 'priority_order', label: 'Reihenfolge', type: 'number', placeholder: '0', default: '0' },
+                { key: 'response_time_h', label: 'Reaktionszeit (Stunden, leer = kein SLA)', type: 'number', placeholder: 'z.B. 24' },
                 { key: 'service_priority_beschreibung', label: 'Beschreibung', type: 'textarea' },
               ]}
               item={spModal._id ? spModal : null}
@@ -896,6 +899,7 @@ export default function StammdatenPage() {
                   service_priority_name: form.service_priority_name,
                   service_priority_beschreibung: form.service_priority_beschreibung || null,
                   priority_order: parseInt(form.priority_order) || 0,
+                  response_time_h: form.response_time_h ? parseInt(form.response_time_h) : null,
                 };
                 if (isEdit) await api.updateServicePriority(spModal._id, data);
                 else await api.createServicePriority(data);

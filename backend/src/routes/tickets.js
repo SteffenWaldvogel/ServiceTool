@@ -59,6 +59,9 @@ const TICKET_SELECT = `
     mt.maschinentyp_name AS maschine_typ,
     ap.ansprechpartner_name AS ap_name,
     ap.ansprechpartner_email AS ap_email,
+    k.service_priority_id,
+    sp.service_priority_name AS sla_priority_name,
+    sp.response_time_h       AS sla_response_time_h,
     (
       SELECT tm.message
       FROM ticket_messages tm
@@ -75,6 +78,7 @@ const TICKET_SELECT = `
   LEFT JOIN maschinentyp mt ON m.maschinentyp_id = mt.maschinentyp_id
   LEFT JOIN ansprechpartner ap ON t.ticket_ansprechpartnerid = ap.ansprechpartnerid
   LEFT JOIN users u ON t.assigned_to = u.user_id
+  LEFT JOIN service_priority sp ON k.service_priority_id = sp.service_priority_id
 `;
 
 // GET /api/tickets/unmatched

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../utils/api';
-import { getKritColor, parseKategorie } from '../utils/helpers';
+import { getKritColor, parseKategorie, getSlaStatus, getSlaLabel } from '../utils/helpers';
 import { useAuth } from '../context/AuthContext';
 import QuickCreate from '../components/QuickCreate';
 import FilterBar from '../components/FilterBar';
@@ -421,6 +421,7 @@ export default function TicketList() {
                 <th><SortableHeader field="kritikalitaet" label="Kritikalität" sort={sort} onSort={handleSort} /></th>
                 <th><SortableHeader field="status" label="Status" sort={sort} onSort={handleSort} /></th>
                 <th><SortableHeader field="assigned" label="Zugewiesen" sort={sort} onSort={handleSort} /></th>
+                <th>SLA</th>
                 <th><SortableHeader field="created_at" label="Erstellt" sort={sort} onSort={handleSort} /></th>
               </tr>
             </thead>
@@ -473,6 +474,18 @@ export default function TicketList() {
                     {t.assigned_display_name
                       ? <span style={{ color: 'var(--text-secondary)' }}>{t.assigned_display_name}</span>
                       : <span className="text-muted">–</span>}
+                  </td>
+                  <td>
+                    {(() => {
+                      const status = getSlaStatus(t);
+                      if (!status || status === 'ok') return <span className="text-muted" style={{ fontSize: 11 }}>–</span>;
+                      const color = status === 'overdue' ? '#ef4444' : '#f59e0b';
+                      return (
+                        <span style={{ fontSize: 11, color, fontWeight: 500 }}>
+                          {status === 'overdue' ? '⚠ ' : '◔ '}{getSlaLabel(t)}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="text-muted" style={{ fontSize: 12 }}>
                     {new Date(t.erstellt_am).toLocaleDateString('de-DE')}

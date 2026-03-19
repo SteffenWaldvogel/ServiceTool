@@ -85,6 +85,7 @@ export default function Dashboard() {
         <StatTile label="Heute erstellt" value={stats.heute_erstellt} color="#10b981" />
         <StatTile label="Heute geschlossen" value={stats.heute_geschlossen} color="#6b7280" />
         <StatTile label="Meine offenen Tickets" value={myOpenCount} color="#06b6d4" />
+        <StatTile label="SLA Überfällig" value={stats.sla_overdue ?? 0} color="#ef4444" />
         <StatTile label="Diese Woche" value={stats.diese_woche} color="#10b981" />
         <StatTile label="Ø Lösungszeit" value={avgH} color="#f59e0b" />
       </div>

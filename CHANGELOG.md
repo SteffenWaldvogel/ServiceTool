@@ -8,6 +8,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [UNRELEASED]
 
+### Added (Session 15)
+- SLA-Tracking: `response_time_h` auf `service_priority`-Tabelle (Migration 008)
+- Standardwerte: Standard=72h, Premium=24h, VIP=4h
+- Ticket-Liste: SLA-Spalte (gelb = Warning <20% verbleibend, rot = Überfällig)
+- TicketDetail: SLA-Status + verbleibende/überschrittene Zeit in Ticket-Feldern
+- Dashboard: Stat-Tile „SLA Überfällig" (Anzahl überfälliger offener Tickets)
+- Stammdaten: `response_time_h` pro Service-Priorität editierbar + Spalte in Tabelle
+
 ### Added (Session 14)
 - CSV-Export: Button „↓ CSV" in Ticket-Liste exportiert aktuelle Filterauswahl
 - GET /api/tickets/export – gleiche Filter wie Liste, max. 5000 Zeilen, UTF-8 BOM für Excel

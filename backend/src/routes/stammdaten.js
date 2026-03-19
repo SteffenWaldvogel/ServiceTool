@@ -18,7 +18,7 @@ function isUniqueViolation(err) {
 router.get('/service-priority', async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT service_priority_id, service_priority_name, service_priority_beschreibung, priority_order FROM service_priority ORDER BY priority_order, service_priority_name'
+      'SELECT service_priority_id, service_priority_name, service_priority_beschreibung, priority_order, response_time_h FROM service_priority ORDER BY priority_order, service_priority_name'
     );
     res.json(result.rows);
   } catch (err) {
@@ -46,14 +46,15 @@ router.post('/service-priority', async (req, res) => {
 // PUT /api/stammdaten/service-priority/:id
 router.put('/service-priority/:id', async (req, res) => {
   try {
-    const { service_priority_name, service_priority_beschreibung, priority_order } = req.body;
+    const { service_priority_name, service_priority_beschreibung, priority_order, response_time_h } = req.body;
     const result = await pool.query(
       `UPDATE service_priority SET
          service_priority_name=COALESCE($1, service_priority_name),
          service_priority_beschreibung=COALESCE($2, service_priority_beschreibung),
-         priority_order=COALESCE($3, priority_order)
+         priority_order=COALESCE($3, priority_order),
+         response_time_h=$5
        WHERE service_priority_id=$4 RETURNING *`,
-      [service_priority_name || null, service_priority_beschreibung || null, priority_order ?? null, req.params.id]
+      [service_priority_name || null, service_priority_beschreibung || null, priority_order ?? null, req.params.id, response_time_h ?? null]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Nicht gefunden' });
     res.json(result.rows[0]);

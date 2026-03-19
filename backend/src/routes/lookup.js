@@ -119,9 +119,17 @@ router.get('/dashboard-stats', async (req, res) => {
             AVG(
               EXTRACT(EPOCH FROM (t.updated_at - t.erstellt_am)) / 3600
             ) FILTER (WHERE s.is_terminal = true ${periodFilter})
-          ::numeric, 1) AS avg_loesungszeit_h
+          ::numeric, 1) AS avg_loesungszeit_h,
+          COUNT(*) FILTER (
+            WHERE s.is_terminal = false
+              AND sp.response_time_h IS NOT NULL
+              AND t.erstellt_am + (sp.response_time_h || ' hours')::interval < NOW()
+              ${periodFilter}
+          ) AS sla_overdue
         FROM ticket t
         LEFT JOIN status s ON t.status_id = s.status_id
+        LEFT JOIN kunden k ON t.ticket_kundennummer = k.kundennummer
+        LEFT JOIN service_priority sp ON k.service_priority_id = sp.service_priority_id
       `),
       pool.query(`
         SELECT s.status_name AS name, s.is_terminal, COUNT(t.ticketnr)::int AS anzahl
