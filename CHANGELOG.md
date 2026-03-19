@@ -8,6 +8,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [UNRELEASED]
 
+### Added (Session 12)
+- PM2-Konfiguration (`ecosystem.config.js`) für Produktionsbetrieb
+- Nginx-Konfiguration (`nginx/nginx.conf`): Reverse Proxy + SPA-Fallback + HTTPS-Vorlage
+- Backup-Script (`scripts/backup.ps1`): pg_dump + gzip + automatisches Cleanup nach 30 Tagen
+- Deploy-Script (`scripts/deploy.ps1`): Build + PM2-Reload in einem Schritt
+- CI/CD verbessert: Frontend-Artefakt-Upload, korrekte Smoke-Test-Env-Vars
+- Deployment-Dokumentation (`docs/DEPLOYMENT.md`): vollständige Setup-Anleitung
+- `.gitignore`: logs/, backups/, frontend/dist/ ergänzt
+
 ### Added (Session 11)
 - Dashboard-Zeitfilter: Buttons Gesamt / Monat / Woche (period-Parameter an dashboard-stats)
 - Neues Stat-Tile „Diese Woche": Tickets erstellt in letzten 7 Tagen

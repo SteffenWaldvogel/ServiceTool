@@ -4,6 +4,21 @@ Chronological log of development sessions for the Service Tool project.
 
 ---
 
+## Session 12 – 2026-03-19
+**Ziel:** Deployment-Setup (PM2 + Nginx + Backup + CI/CD)
+**Scope:** ecosystem.config.js, nginx/, scripts/, docs/, .github/workflows/ci.yml
+
+### Tasks
+- ✅ ecosystem.config.js: PM2-Konfiguration (autorestart, logs, production env)
+- ✅ nginx/nginx.conf: Reverse Proxy /api/ → :3001, SPA-Fallback, HTTPS-Vorlage
+- ✅ scripts/backup.ps1: pg_dump + gzip + Cleanup alter Backups
+- ✅ scripts/deploy.ps1: npm ci + npm run build + pm2 reload in einem Schritt
+- ✅ .github/workflows/ci.yml: Artefakt-Upload, Smoke-Test mit korrekten Env-Vars
+- ✅ docs/DEPLOYMENT.md: vollständige Setup-Anleitung (DB, PM2, Nginx, Backup, HTTPS)
+- ✅ .gitignore: logs/, backups/, frontend/dist/ ergänzt
+
+---
+
 ## Session 11 – 2026-03-18
 **Ziel:** Dashboard-Erweiterungen (Zeitfilter, Techniker-Chart, neue Stat-Tiles)
 **Scope:** lookup.js, api.js, Dashboard.jsx

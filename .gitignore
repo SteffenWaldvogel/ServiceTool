@@ -8,3 +8,6 @@ Thumbs.db
 *.local
 .mcp.json
 prompt.txt
+logs/
+backups/
+frontend/dist/
