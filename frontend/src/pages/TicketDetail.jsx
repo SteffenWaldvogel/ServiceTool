@@ -23,11 +23,11 @@ function EditField({ label, value, editValue, type = 'text', options, onSave, nu
 
   if (editing) {
     return (
-      <div className="field-row" style={{ alignItems: 'center' }}>
+      <div className="field-row field-row-editing" style={{ alignItems: 'center' }}>
         <div className="field-key">{label}</div>
         <div style={{ flex: 1, display: 'flex', gap: 8 }}>
           {type === 'select' ? (
-            <select className="form-control" value={val} onChange={e => setVal(e.target.value)} style={{ height: 32 }}>
+            <select className="form-control" value={val} onChange={e => setVal(e.target.value)} style={{ height: 32 }} autoFocus>
               {nullable && <option value="">— Keine —</option>}
               {options.map(o => (
                 <option key={o.id ?? o.value} value={o.id ?? o.value}>
@@ -36,9 +36,9 @@ function EditField({ label, value, editValue, type = 'text', options, onSave, nu
               ))}
             </select>
           ) : type === 'textarea' ? (
-            <textarea className="form-control" value={val} onChange={e => setVal(e.target.value)} rows={3} style={{ flex: 1 }} />
+            <textarea className="form-control" value={val} onChange={e => setVal(e.target.value)} rows={3} style={{ flex: 1 }} autoFocus />
           ) : (
-            <input className="form-control" type={type} value={val} onChange={e => setVal(e.target.value)} style={{ height: 32 }} />
+            <input className="form-control" type={type} value={val} onChange={e => setVal(e.target.value)} style={{ height: 32 }} autoFocus />
           )}
           <button className="btn btn-primary btn-sm" onClick={save}>✓</button>
           <button className="btn btn-ghost btn-sm" onClick={() => setEditing(false)}>✕</button>
@@ -48,10 +48,10 @@ function EditField({ label, value, editValue, type = 'text', options, onSave, nu
   }
 
   return (
-    <div className="field-row" style={{ cursor: 'pointer' }} onClick={startEdit} title="Klicken zum Bearbeiten">
+    <div className="field-row field-row-editable" onClick={startEdit} title="Klicken zum Bearbeiten">
       <div className="field-key">{label}</div>
       <div className="field-val">{value || <span className="text-muted">–</span>}</div>
-      <span style={{ color: 'var(--text-muted)', fontSize: 11, opacity: 0.5, marginLeft: 8 }}>✎</span>
+      <span style={{ color: 'var(--accent)', fontSize: 11, opacity: 0.6, marginLeft: 'auto' }}>Bearbeiten</span>
     </div>
   );
 }
@@ -137,6 +137,13 @@ export default function TicketDetail() {
   const [replyInternal, setReplyInternal] = useState(false);
   const [msgSuccess, setMsgSuccess] = useState('');
   const [movingMsg, setMovingMsg] = useState(null);
+  const [links, setLinks] = useState([]);
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [linkTarget, setLinkTarget] = useState('');
+  const [linkError, setLinkError] = useState('');
+  const [showMergeModal, setShowMergeModal] = useState(false);
+  const [mergeTarget, setMergeTarget] = useState('');
+  const [mergeError, setMergeError] = useState('');
 
   const loadTicket = () => api.getTicket(id).then(t => {
     setTicket(t);
@@ -166,6 +173,7 @@ export default function TicketDetail() {
           .catch(() => {});
       }
     }).catch(console.error).finally(() => setLoading(false));
+    api.getTicketLinks(id).then(setLinks).catch(() => setLinks([]));
   }, [id]);
 
   // Reload AP when kunde changes
@@ -210,6 +218,44 @@ export default function TicketDetail() {
   if (loading) return <div className="loading"><div className="spinner" /> Lade Ticket…</div>;
   if (!ticket) return <div className="page"><div className="error-banner">Ticket nicht gefunden</div></div>;
 
+  const loadLinks = () => api.getTicketLinks(id).then(setLinks).catch(() => setLinks([]));
+
+  const addLink = async () => {
+    if (!linkTarget) return;
+    try {
+      await api.addTicketLink(id, parseInt(linkTarget));
+      setShowLinkModal(false);
+      setLinkTarget('');
+      setLinkError('');
+      loadLinks();
+    } catch (err) {
+      setLinkError(err.message);
+    }
+  };
+
+  const removeLink = async (linkId) => {
+    await api.deleteTicketLink(id, linkId);
+    loadLinks();
+  };
+
+  const mergeChild = async () => {
+    if (!mergeTarget) return;
+    try {
+      await api.mergeTicket(id, parseInt(mergeTarget));
+      setShowMergeModal(false);
+      setMergeTarget('');
+      setMergeError('');
+      loadTicket();
+    } catch (err) {
+      setMergeError(err.message);
+    }
+  };
+
+  const unmergeChild = async (childTicketnr) => {
+    await api.unmergeTicket(childTicketnr);
+    loadTicket();
+  };
+
   const betreff = ticket.messages?.[0]?.message?.split('\n')[0] || ticket.betreff || `Ticket #${ticket.ticketnr}`;
 
   const statusOptions = lookup.status.map(s => ({ id: s.status_id, name: s.status_name }));
@@ -224,10 +270,25 @@ export default function TicketDetail() {
     <div className="page">
       <div className="page-header">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <button className="btn btn-ghost btn-sm" onClick={() => navigate('/tickets')}>← Zurück</button>
-            <span className="mono" style={{ color: 'var(--accent)', fontSize: 15 }}>#{ticket.ticketnr}</span>
+          <div className="breadcrumb">
+            <Link to="/tickets">Tickets</Link>
+            <span className="sep">/</span>
+            <span>#{ticket.ticketnr}</span>
           </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span className="mono" style={{ color: 'var(--accent)', fontSize: 15 }}>#{ticket.ticketnr}</span>
+            {(ticket.child_tickets?.length > 0) && (
+              <span className="badge" style={{ background: 'rgba(168,85,247,0.15)', color: '#a855f7', marginLeft: 8 }}>Überticket</span>
+            )}
+          </div>
+          {ticket.parent_ticketnr && (
+            <div style={{ marginTop: 4, fontSize: 13, color: 'var(--text-secondary)' }}>
+              Unter-Ticket von{' '}
+              <Link to={`/tickets/${ticket.parent_ticketnr}`} style={{ color: '#a855f7', fontWeight: 600 }}>
+                #{ticket.parent_ticketnr}
+              </Link>
+            </div>
+          )}
           <div className="page-title" style={{ marginTop: 8 }}>
             {betreff.length > 80 ? betreff.slice(0, 80) + '…' : betreff}
           </div>
@@ -276,6 +337,17 @@ export default function TicketDetail() {
               messages={ticket.messages || []}
               onMoveMessage={(msg) => setMovingMsg(msg)}
             />
+            {ticket.child_messages?.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#a855f7', marginBottom: 8, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+                  Nachrichten aus Unter-Tickets
+                </div>
+                <MessageThread
+                  messages={ticket.child_messages.map(m => ({ ...m, _fromChild: true }))}
+                  onMoveMessage={(msg) => setMovingMsg(msg)}
+                />
+              </div>
+            )}
             {showReply && (
               <ReplyBox
                 ticketnr={ticket.ticketnr}
@@ -456,6 +528,127 @@ export default function TicketDetail() {
               <div className="field-key">Aktualisiert</div>
               <div className="field-val text-muted">{new Date(ticket.updated_at || ticket.created_at).toLocaleString('de-DE')}</div>
             </div>
+          </div>
+
+          {/* Unter-Tickets (Überticket-Ansicht) */}
+          {!ticket.parent_ticketnr && (
+            <div className="card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <div className="card-title" style={{ marginBottom: 0, color: '#a855f7' }}>
+                  Unter-Tickets ({ticket.child_tickets?.length || 0})
+                </div>
+                <button className="btn btn-ghost btn-sm" onClick={() => setShowMergeModal(true)}>+ Zusammenführen</button>
+              </div>
+              {(!ticket.child_tickets || ticket.child_tickets.length === 0) ? (
+                <div className="text-muted" style={{ fontSize: 12 }}>Keine Unter-Tickets — "Zusammenführen" um ein Ticket einzugliedern</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {ticket.child_tickets.map(c => (
+                    <div key={c.ticketnr} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                      <div>
+                        <Link to={`/tickets/${c.ticketnr}`} style={{ color: '#a855f7', fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
+                          #{c.ticketnr}
+                        </Link>
+                        <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginLeft: 8 }}>
+                          {c.kunden_name || ''}
+                        </span>
+                        {c.ap_name && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>{c.ap_name}</span>}
+                        {c.maschine_maschinennr && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>M: {c.maschine_maschinennr}</span>}
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                          <span className="badge" style={{
+                            background: c.is_terminal ? 'rgba(100,116,139,0.15)' : 'rgba(59,130,246,0.15)',
+                            color: c.is_terminal ? '#64748b' : 'var(--accent)',
+                            fontSize: 10
+                          }}>{c.status_name}</span>
+                          {c.betreff && (
+                            <span style={{ marginLeft: 8, fontSize: 11 }}>
+                              {(c.betreff || '').split('\n')[0].slice(0, 60)}{c.betreff?.length > 60 ? '…' : ''}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => { if (confirm(`Ticket #${c.ticketnr} aus Überticket lösen?`)) unmergeChild(c.ticketnr); }}
+                        title="Aus Überticket lösen"
+                        style={{ fontSize: 11, color: 'var(--text-muted)' }}
+                      >&#x2715;</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {showMergeModal && (
+                <div style={{ marginTop: 10, padding: 10, background: 'var(--surface)', borderRadius: 6, border: '1px solid var(--border)' }}>
+                  {mergeError && <div className="error-banner" style={{ marginBottom: 8, fontSize: 12 }}>{mergeError}</div>}
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>
+                    Das Ziel-Ticket wird als Unter-Ticket eingegliedert. Alle Nachrichten werden hier angezeigt.
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <input
+                      className="form-control"
+                      placeholder="Ticket-Nr."
+                      value={mergeTarget}
+                      onChange={e => setMergeTarget(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && mergeChild()}
+                      style={{ height: 30, flex: 1 }}
+                    />
+                    <button className="btn btn-primary btn-sm" onClick={mergeChild}>Zusammenführen</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => { setShowMergeModal(false); setMergeError(''); setMergeTarget(''); }}>&#x2715;</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Verknüpfte Tickets */}
+          <div className="card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div className="card-title" style={{ marginBottom: 0 }}>Verknüpfte Tickets ({links.length})</div>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowLinkModal(true)}>+ Verknüpfen</button>
+            </div>
+            {links.length === 0 ? (
+              <div className="text-muted" style={{ fontSize: 12 }}>Keine verknüpften Tickets</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {links.map(l => (
+                  <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+                    <div>
+                      <Link to={`/tickets/${l.linked_ticketnr}`} style={{ color: 'var(--accent)', fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
+                        #{l.linked_ticketnr}
+                      </Link>
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginLeft: 8 }}>
+                        {l.kunden_name || ''}
+                      </span>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        <span className="badge" style={{
+                          background: l.is_terminal ? 'rgba(100,116,139,0.15)' : 'rgba(59,130,246,0.15)',
+                          color: l.is_terminal ? '#64748b' : 'var(--accent)',
+                          fontSize: 10
+                        }}>{l.status_name}</span>
+                      </div>
+                    </div>
+                    <button className="btn btn-ghost btn-sm" onClick={() => removeLink(l.id)} title="Verknüpfung entfernen" style={{ fontSize: 11, color: 'var(--text-muted)' }}>&#x2715;</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {showLinkModal && (
+              <div style={{ marginTop: 10, padding: 10, background: 'var(--surface)', borderRadius: 6, border: '1px solid var(--border)' }}>
+                {linkError && <div className="error-banner" style={{ marginBottom: 8, fontSize: 12 }}>{linkError}</div>}
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input
+                    className="form-control"
+                    placeholder="Ticket-Nr."
+                    value={linkTarget}
+                    onChange={e => setLinkTarget(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addLink()}
+                    style={{ height: 30, flex: 1 }}
+                  />
+                  <button className="btn btn-primary btn-sm" onClick={addLink}>Verknüpfen</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => { setShowLinkModal(false); setLinkError(''); setLinkTarget(''); }}>&#x2715;</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

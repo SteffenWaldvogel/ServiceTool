@@ -116,30 +116,57 @@ export default function UnmatchedEmailsPanel({ onAssigned }) {
         <button className="btn btn-ghost btn-sm" onClick={load}>&#8635; Aktualisieren</button>
       </div>
       {emails.length === 0 ? (
-        <div className="empty-state"><p>Keine nicht zugeordneten Emails</p></div>
+        <div className="empty-state" style={{ padding: 40 }}>
+          <div style={{ fontSize: 32, marginBottom: 8, color: 'var(--success)' }}>&#10003;</div>
+          <p style={{ fontWeight: 500 }}>Alle Emails verarbeitet</p>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Neue Emails erscheinen hier automatisch (Polling alle 30s)</p>
+        </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {emails.map(e => (
-            <div key={e.id} className="card" style={{ padding: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>
-                    {e.from_name || e.from_email} &lt;{e.from_email}&gt;
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {emails.map(e => {
+            const ageMs = Date.now() - new Date(e.received_at).getTime();
+            const ageH = Math.floor(ageMs / 3600000);
+            const ageLabel = ageH < 1 ? 'Gerade eben' : ageH < 24 ? `vor ${ageH}h` : `vor ${Math.floor(ageH / 24)}d`;
+            const isOld = ageH > 24;
+            return (
+              <div key={e.id} className="card" style={{ padding: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                      <div style={{
+                        width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
+                        background: 'rgba(59,130,246,0.15)', color: 'var(--accent)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontWeight: 700, fontSize: 14,
+                      }}>
+                        {(e.from_name || e.from_email || '?')[0].toUpperCase()}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 14 }}>{e.from_name || e.from_email}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{e.from_email}</div>
+                      </div>
+                      <span style={{
+                        marginLeft: 'auto', fontSize: 11, flexShrink: 0,
+                        color: isOld ? 'var(--warning)' : 'var(--text-muted)',
+                        fontWeight: isOld ? 500 : 400,
+                      }}>{ageLabel}</span>
+                    </div>
+                    {e.subject && <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{e.subject}</div>}
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                      {(e.message || '').slice(0, 250)}{e.message?.length > 250 ? '…' : ''}
+                    </div>
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{e.subject}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                    {new Date(e.received_at).toLocaleString('de-DE')}
-                  </div>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6, maxWidth: 500 }}>
-                    {(e.message || '').slice(0, 200)}{e.message?.length > 200 ? '…' : ''}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+                    <button className="btn btn-primary btn-sm" onClick={() => setAssigning(e)}>Ticket zuweisen</button>
+                    <button className="btn btn-danger btn-sm" onClick={() => {
+                      if (!confirm('Diese Email wird dauerhaft gelöscht. Fortfahren?')) return;
+                      api.deleteUnmatchedEmail(e.id).then(() => { load(); if (onAssigned) onAssigned(); });
+                    }}>Löschen</button>
                   </div>
                 </div>
-                <button className="btn btn-primary btn-sm" onClick={() => setAssigning(e)}>
-                  Ticket zuweisen
-                </button>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
       {assigning && (

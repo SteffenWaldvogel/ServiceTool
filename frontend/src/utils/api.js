@@ -69,6 +69,30 @@ export const api = {
   getUnmatchedEmails: () => request('/tickets/unmatched'),
   assignUnmatchedEmail: (unmatchedId, ticketnr) =>
     request(`/tickets/unmatched/${unmatchedId}/assign`, { method: 'POST', body: JSON.stringify({ ticketnr }) }),
+  deleteUnmatchedEmail: (unmatchedId) =>
+    request(`/tickets/unmatched/${unmatchedId}`, { method: 'DELETE' }),
+
+  // Ticket-Verknüpfungen
+  getTicketLinks: (ticketnr) => request(`/tickets/${ticketnr}/links`),
+  addTicketLink: (ticketnr, linked_ticketnr, link_type) =>
+    request(`/tickets/${ticketnr}/links`, { method: 'POST', body: JSON.stringify({ linked_ticketnr, link_type }) }),
+  deleteTicketLink: (ticketnr, linkId) =>
+    request(`/tickets/${ticketnr}/links/${linkId}`, { method: 'DELETE' }),
+  mergeTicket: (parentTicketnr, childTicketnr) =>
+    request(`/tickets/${parentTicketnr}/merge`, { method: 'POST', body: JSON.stringify({ child_ticketnr: childTicketnr }) }),
+  unmergeTicket: (childTicketnr) =>
+    request(`/tickets/${childTicketnr}/unmerge`, { method: 'POST' }),
+
+  // ── Import ──────────────────────────────────────────────────────────────
+  getImportFields: (entityType) => request(`/import/fields/${entityType}`),
+  uploadImportFile: (file) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return fetch(`${BASE}/import/upload`, { method: 'POST', credentials: 'include', body: fd })
+      .then(r => r.ok ? r.json() : r.json().then(e => { throw new Error(e.error); }));
+  },
+  previewImport: (data) => request('/import/preview', { method: 'POST', body: JSON.stringify(data) }),
+  executeImport: (data) => request('/import/execute', { method: 'POST', body: JSON.stringify(data) }),
 
   // Dashboard stats alias
   getStats: () => request('/lookup/dashboard-stats'),

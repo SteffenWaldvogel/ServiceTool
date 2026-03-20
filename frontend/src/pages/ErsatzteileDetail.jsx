@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { api } from '../utils/api';
 import CustomFieldsSection from '../components/CustomFieldsSection';
 
@@ -205,7 +205,7 @@ export default function ErsatzteileDetail() {
       api.getMaschinentypen()
     ]).then(([p, all, mt]) => {
       setPart(p);
-      setAllParts(all);
+      setAllParts(all.data || all);
       setMaschinentypen(mt);
     }).catch(console.error).finally(() => setLoading(false));
   }, [id]);
@@ -226,7 +226,7 @@ export default function ErsatzteileDetail() {
     <div className="page">
       <div className="page-header">
         <div>
-          <button className="btn btn-ghost btn-sm" onClick={() => navigate('/ersatzteile')} style={{ marginBottom: 8 }}>← Zurück</button>
+          <div className="breadcrumb"><Link to="/ersatzteile">Ersatzteile</Link><span className="sep">/</span><span>#{part.artikelnr}</span></div>
           <div className="page-title">{part.bezeichnung}</div>
           <span className="mono" style={{ color: 'var(--accent)', fontSize: 13 }}>#{part.artikelnr}</span>
         </div>

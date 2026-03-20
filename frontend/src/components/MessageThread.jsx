@@ -6,6 +6,17 @@ function formatDate(dt) {
   return d.toLocaleDateString('de-DE') + ' ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 }
 
+function formatSize(bytes) {
+  if (!bytes) return '';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function isImageType(mimeType) {
+  return mimeType && mimeType.startsWith('image/');
+}
+
 const MessageThread = React.memo(function MessageThread({ messages = [], onMoveMessage }) {
   if (messages.length === 0) {
     return (
@@ -17,9 +28,12 @@ const MessageThread = React.memo(function MessageThread({ messages = [], onMoveM
     );
   }
 
+  // Sort by created_at ascending (oldest first)
+  const sorted = [...messages].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
   return (
     <div className="msg-thread">
-      {messages.map((msg, i) => {
+      {sorted.map((msg, i) => {
         const isEmail = msg.message_type === 'email';
         const isTech = msg.message_type === 'technician';
         const isSys = msg.message_type === 'system';
@@ -31,8 +45,10 @@ const MessageThread = React.memo(function MessageThread({ messages = [], onMoveM
         else if (isSys) bubbleClass += ' msg-system';
         if (msg.is_internal) bubbleClass += ' msg-internal';
 
+        const attachments = Array.isArray(msg.attachments) ? msg.attachments : [];
+
         return (
-          <div key={msg.message_id} className={bubbleClass}>
+          <div key={msg.message_id || i} className={bubbleClass}>
             {!isSys && (
               <div className="msg-header">
                 {isEmail && (
@@ -75,9 +91,42 @@ const MessageThread = React.memo(function MessageThread({ messages = [], onMoveM
                     Intern
                   </span>
                 )}
+                {msg._fromChild && (
+                  <span className="msg-badge" style={{ background: 'rgba(168,85,247,0.15)', color: '#a855f7', marginLeft: 4 }}>
+                    Ticket #{msg.ticketnr}
+                  </span>
+                )}
               </div>
             )}
             <div className="msg-text">{msg.message}</div>
+            {attachments.length > 0 && (
+              <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {attachments.map(att => (
+                  <a
+                    key={att.id}
+                    href={`/api/tickets/attachments/${att.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '6px 10px', borderRadius: 6,
+                      background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)',
+                      color: 'var(--accent)', textDecoration: 'none', fontSize: 12,
+                      maxWidth: 280, overflow: 'hidden',
+                    }}
+                    title={`${att.filename} (${formatSize(att.size_bytes)})`}
+                  >
+                    <span>{isImageType(att.mime_type) ? '🖼' : '📎'}</span>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {att.filename}
+                    </span>
+                    {att.size_bytes > 0 && (
+                      <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>({formatSize(att.size_bytes)})</span>
+                    )}
+                  </a>
+                ))}
+              </div>
+            )}
             {onMoveMessage && isEmail && (
               <button
                 className="btn btn-ghost btn-sm"

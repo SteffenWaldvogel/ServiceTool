@@ -141,10 +141,8 @@ export default function AnsprechpartnerDetail() {
   return (
     <div className="page">
       <div className="page-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <button className="btn btn-ghost btn-sm" onClick={() => navigate('/ansprechpartner')}>
-            ← Zurück
-          </button>
+        <div>
+          <div className="breadcrumb"><Link to="/ansprechpartner">Ansprechpartner</Link><span className="sep">/</span><span>{ap.ansprechpartner_name}</span></div>
           <div>
             <div className="page-title">{ap.ansprechpartner_name}</div>
             <div className="page-subtitle">

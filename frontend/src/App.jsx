@@ -17,6 +17,8 @@ import AnsprechpartnerList from './pages/AnsprechpartnerList';
 import AnsprechpartnerDetail from './pages/AnsprechpartnerDetail';
 import StammdatenPage from './pages/StammdatenPage';
 import SystemPage from './pages/SystemPage';
+import ImportPage from './pages/ImportPage';
+import PosteingangPage from './pages/PosteingangPage';
 
 const NavIcon = ({ path }) => (
   <svg className="nav-icon" viewBox="0 0 20 20" fill="currentColor">
@@ -34,10 +36,13 @@ const icons = {
   stammdaten: <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />,
   system: <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />,
   benutzer: <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />,
+  import: <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />,
+  posteingang: <path fillRule="evenodd" d="M5 3a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V5a2 2 0 00-2-2H5zm0 2h10v7h-2l-1 2H8l-1-2H5V5z" clipRule="evenodd" />,
 };
 
 function AppContent() {
-  const { user, loading, logout, hasPermission } = useAuth();
+  const auth = useAuth();
+  const { user, loading, logout, hasPermission } = auth || {};
   const [unreadCount, setUnreadCount] = useState(0);
   const [unmatchedCount, setUnmatchedCount] = useState(0);
   const [showChangePw, setShowChangePw] = useState(false);
@@ -67,7 +72,7 @@ function AppContent() {
     return () => clearTimeout(timer);
   }, []);
 
-  if (loading) return <div className="loading"><div className="spinner" /></div>;
+  if (!auth || loading) return <div className="loading"><div className="spinner" /></div>;
   if (!user) return <LoginPage />;
 
   return (
@@ -78,6 +83,7 @@ function AppContent() {
             <h1>Service Tool</h1>
             <span>v2.0</span>
           </div>
+          <NavLink to="/tickets?create=1" className="sidebar-action">+ Neues Ticket</NavLink>
           <nav className="sidebar-nav">
             <div className="nav-section">Übersicht</div>
             <NavLink to="/dashboard" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
@@ -90,6 +96,11 @@ function AppContent() {
               <NavIcon path={icons.tickets} />
               Tickets
               {unreadCount > 0 && <span className="nav-badge">{unreadCount}</span>}
+            </NavLink>
+            <NavLink to="/posteingang" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
+              <NavIcon path={icons.posteingang} />
+              Posteingang
+              {unmatchedCount > 0 && <span className="nav-badge nav-badge-warn">{unmatchedCount}</span>}
             </NavLink>
 
             <div className="nav-section">Stamm</div>
@@ -117,11 +128,16 @@ function AppContent() {
                 Stammdaten
               </NavLink>
             )}
+            {hasPermission('stammdaten.manage') && (
+              <NavLink to="/import" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
+                <NavIcon path={icons.import} />
+                Daten-Import
+              </NavLink>
+            )}
             {hasPermission('system.view') && (
               <NavLink to="/system" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
                 <NavIcon path={icons.system} />
                 System
-                {unmatchedCount > 0 && <span className="nav-badge nav-badge-warn">{unmatchedCount}</span>}
               </NavLink>
             )}
             {hasPermission('users.manage') && (
@@ -154,6 +170,7 @@ function AppContent() {
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/tickets" element={<TicketList />} />
+            <Route path="/posteingang" element={<PosteingangPage />} />
             <Route path="/tickets/:id" element={<TicketDetail />} />
             <Route path="/kunden" element={<KundenList />} />
             <Route path="/kunden/:id" element={<KundenDetail />} />
@@ -164,6 +181,7 @@ function AppContent() {
             <Route path="/ansprechpartner" element={<AnsprechpartnerList />} />
             <Route path="/ansprechpartner/:id" element={<AnsprechpartnerDetail />} />
             {hasPermission('stammdaten.manage') && <Route path="/stammdaten" element={<StammdatenPage />} />}
+            {hasPermission('stammdaten.manage') && <Route path="/import" element={<ImportPage />} />}
             {hasPermission('system.view') && <Route path="/system" element={<SystemPage />} />}
             {hasPermission('users.manage') && <Route path="/benutzer" element={<BenutzerPage />} />}
           </Routes>

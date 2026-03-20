@@ -38,6 +38,7 @@ const customFieldsAdminRouter = require('./routes/customFieldsAdmin');
 const ansprechpartnerRouter = require('./routes/ansprechpartner');
 const authRouter = require('./routes/auth');
 const usersRouter = require('./routes/users');
+const importRouter = require('./routes/import');
 const { requireAuth, requireAdmin } = require('./middleware/auth');
 const { startEmailPolling } = require('./services/emailService');
 
@@ -103,6 +104,7 @@ app.use('/api/system', requireAdmin, systemRouter);
 app.use('/api/custom-fields', requireAdmin, customFieldsAdminRouter);
 app.use('/api/ansprechpartner', ansprechpartnerRouter);
 app.use('/api/users', requireAdmin, usersRouter);
+app.use('/api/import', importRouter);
 
 // Sentry Error-Handler (muss vor eigenem Error-Handler stehen)
 if (process.env.SENTRY_DSN) {

@@ -17,7 +17,7 @@ const transporter = nodemailer.createTransport({
 });
 
 // ─── addMessageToTicket ───────────────────────────────────────────────────────
-async function addMessageToTicket(ticketnr, fromEmail, fromName, messageText, messageType = 'email') {
+async function addMessageToTicket(ticketnr, fromEmail, fromName, messageText, messageType = 'email', attachments = []) {
   const ticketCheck = await pool.query('SELECT ticketnr FROM ticket WHERE ticketnr = $1', [ticketnr]);
   if (ticketCheck.rows.length === 0) {
     console.log(`⚠️  Ticket #${ticketnr} nicht gefunden – Nachricht ignoriert`);
@@ -28,8 +28,24 @@ async function addMessageToTicket(ticketnr, fromEmail, fromName, messageText, me
      VALUES ($1, $2, $3, $4, $5, false, NOW()) RETURNING *`,
     [ticketnr, fromEmail, fromName || fromEmail, messageText, messageType]
   );
+  const messageId = result.rows[0].message_id;
+
+  // Save attachments
+  for (const att of attachments) {
+    try {
+      await pool.query(
+        `INSERT INTO message_attachments (message_id, filename, mime_type, size_bytes, content)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [messageId, att.filename || 'attachment', att.contentType || 'application/octet-stream', att.size || 0, att.content]
+      );
+      console.log(`📎 Anhang gespeichert: ${att.filename} (${att.size} bytes)`);
+    } catch (err) {
+      console.error(`⚠️ Anhang-Fehler: ${err.message}`);
+    }
+  }
+
   await pool.query(`UPDATE ticket SET updated_at = NOW(), "geändert_am" = NOW() WHERE ticketnr = $1`, [ticketnr]);
-  console.log(`✅ Nachricht zu Ticket #${ticketnr} gespeichert (${messageType})`);
+  console.log(`✅ Nachricht zu Ticket #${ticketnr} gespeichert (${messageType}, ${attachments.length} Anhänge)`);
   return result.rows[0];
 }
 
@@ -85,6 +101,17 @@ async function processIncomingEmail(parsed, rawText) {
     const subject = parsed.subject || '';
     const messageText = parsed.text || (parsed.html ? parsed.html.replace(/<[^>]+>/g, '') : '') || '';
 
+    // Extract attachments
+    const attachments = (parsed.attachments || []).map(att => ({
+      filename: att.filename || 'attachment',
+      contentType: att.contentType || 'application/octet-stream',
+      size: att.size || (att.content ? att.content.length : 0),
+      content: att.content, // Buffer
+    }));
+    if (attachments.length > 0) {
+      console.log(`📎 ${attachments.length} Anhänge gefunden: ${attachments.map(a => a.filename).join(', ')}`);
+    }
+
     // STUFE 1: Ticket-Nummer im Betreff
     const ticketMatch = subject.match(/\[Ticket #(\d+)\]/i) || subject.match(/ticket[- #]+(\d+)/i);
     if (ticketMatch) {
@@ -100,7 +127,7 @@ async function processIncomingEmail(parsed, rawText) {
         if (termCheck.rows[0].is_terminal) {
           console.log(`⚠️  Ticket #${ticketnr} ist abgeschlossen – speichere trotzdem`);
         }
-        await addMessageToTicket(ticketnr, fromAddress, fromName, messageText.slice(0, 5000), 'email');
+        await addMessageToTicket(ticketnr, fromAddress, fromName, messageText.slice(0, 5000), 'email', attachments);
         console.log(`📨 Email von ${fromAddress}: Match-Stufe 1 → Ticket #${ticketnr}`);
         return;
       }
@@ -131,7 +158,7 @@ async function processIncomingEmail(parsed, rawText) {
 
       if (openTicket.rows.length > 0) {
         const ticketnr = openTicket.rows[0].ticketnr;
-        await addMessageToTicket(ticketnr, fromAddress, fromName, messageText.slice(0, 5000), 'email');
+        await addMessageToTicket(ticketnr, fromAddress, fromName, messageText.slice(0, 5000), 'email', attachments);
         console.log(`📨 Email von ${fromAddress}: Match-Stufe 2 → Ticket #${ticketnr}`);
         return;
       } else {
@@ -151,7 +178,7 @@ async function processIncomingEmail(parsed, rawText) {
             [kat_id, krit_id, status_id, kundennummer, fromAddress]
           );
           const newTicketnr = ticketResult.rows[0].ticketnr;
-          await addMessageToTicket(newTicketnr, fromAddress, fromName, messageText.slice(0, 5000), 'email');
+          await addMessageToTicket(newTicketnr, fromAddress, fromName, messageText.slice(0, 5000), 'email', attachments);
           console.log(`📨 Email von ${fromAddress}: Match-Stufe 2b → neues Ticket #${newTicketnr}`);
           return;
         }

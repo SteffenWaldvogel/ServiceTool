@@ -62,6 +62,7 @@ const TICKET_SELECT = `
     k.service_priority_id,
     sp.service_priority_name AS sla_priority_name,
     sp.response_time_h       AS sla_response_time_h,
+    t.parent_ticketnr,
     (
       SELECT tm.message
       FROM ticket_messages tm
@@ -107,6 +108,34 @@ router.post('/unmatched/:id/assign', async (req, res) => {
 
     await pool.query('DELETE FROM unmatched_emails WHERE id = $1', [req.params.id]);
     res.status(201).json(msg);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/tickets/unmatched/:id
+router.delete('/unmatched/:id', async (req, res) => {
+  try {
+    const result = await pool.query('DELETE FROM unmatched_emails WHERE id = $1 RETURNING id', [req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Email nicht gefunden' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/tickets/attachments/:attachmentId – Download Anhang
+router.get('/attachments/:attachmentId', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT filename, mime_type, content FROM message_attachments WHERE id = $1',
+      [req.params.attachmentId]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Anhang nicht gefunden' });
+    const { filename, mime_type, content } = result.rows[0];
+    res.set('Content-Type', mime_type || 'application/octet-stream');
+    res.set('Content-Disposition', `inline; filename="${encodeURIComponent(filename)}"`);
+    res.send(content);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -270,15 +299,54 @@ router.get('/:id', async (req, res) => {
 
     const ticket = result.rows[0];
 
-    // Fetch all messages
+    // Fetch all messages with attachment info
     const messages = await pool.query(
-      `SELECT message_id, ticketnr, from_email, from_name, message, message_type, is_internal, created_at
-       FROM ticket_messages
-       WHERE ticketnr = $1
-       ORDER BY created_at ASC`,
+      `SELECT tm.message_id, tm.ticketnr, tm.from_email, tm.from_name, tm.message, tm.message_type, tm.is_internal, tm.created_at,
+              COALESCE(
+                (SELECT json_agg(json_build_object('id', ma.id, 'filename', ma.filename, 'mime_type', ma.mime_type, 'size_bytes', ma.size_bytes))
+                 FROM message_attachments ma WHERE ma.message_id = tm.message_id),
+                '[]'::json
+              ) AS attachments
+       FROM ticket_messages tm
+       WHERE tm.ticketnr = $1
+       ORDER BY tm.created_at ASC`,
       [req.params.id]
     );
     ticket.messages = messages.rows;
+
+    // Fetch child tickets (Unter-Tickets) if this is an Überticket
+    const children = await pool.query(
+      `SELECT t.ticketnr, t.erstellt_am, t.status_id,
+              s.status_name, s.is_terminal,
+              k.name_kunde AS kunden_name,
+              ap.ansprechpartner_name AS ap_name,
+              m.maschinennr AS maschine_maschinennr,
+              (SELECT tm.message FROM ticket_messages tm WHERE tm.ticketnr = t.ticketnr ORDER BY tm.created_at ASC LIMIT 1) AS betreff
+       FROM ticket t
+       LEFT JOIN status s ON t.status_id = s.status_id
+       LEFT JOIN kunden k ON t.ticket_kundennummer = k.kundennummer
+       LEFT JOIN ansprechpartner ap ON t.ticket_ansprechpartnerid = ap.ansprechpartnerid
+       LEFT JOIN maschine m ON t.ticket_maschinenid = m.maschinenid
+       WHERE t.parent_ticketnr = $1
+       ORDER BY t.erstellt_am ASC`,
+      [req.params.id]
+    );
+    ticket.child_tickets = children.rows;
+
+    // Fetch messages from all child tickets for merged view
+    if (children.rows.length > 0) {
+      const childIds = children.rows.map(c => c.ticketnr);
+      const childMessages = await pool.query(
+        `SELECT message_id, ticketnr, from_email, from_name, message, message_type, is_internal, created_at
+         FROM ticket_messages
+         WHERE ticketnr = ANY($1)
+         ORDER BY created_at ASC`,
+        [childIds]
+      );
+      ticket.child_messages = childMessages.rows;
+    } else {
+      ticket.child_messages = [];
+    }
 
     res.json(ticket);
   } catch (err) {
@@ -635,6 +703,113 @@ router.post('/:id/link-message', async (req, res) => {
     await pool.query('UPDATE ticket SET updated_at=NOW(), "geändert_am"=NOW() WHERE ticketnr=$1', [req.params.id]);
 
     res.json({ success: true, message: `Nachricht zu Ticket #${req.params.id} verschoben`, data: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Ticket-Verknüpfungen ────────────────────────────────────────────────────
+
+// GET /api/tickets/:id/links
+router.get('/:id/links', async (req, res) => {
+  try {
+    const ticketnr = parseInt(req.params.id);
+    const result = await pool.query(
+      `SELECT tl.id, tl.link_type, tl.created_at,
+              CASE WHEN tl.ticket_a = $1 THEN tl.ticket_b ELSE tl.ticket_a END AS linked_ticketnr,
+              t.status_id, s.status_name, s.is_terminal,
+              k.name_kunde AS kunden_name,
+              (SELECT m.message FROM ticket_messages m WHERE m.ticketnr = t.ticketnr ORDER BY m.created_at LIMIT 1) AS betreff
+       FROM ticket_links tl
+       JOIN ticket t ON t.ticketnr = CASE WHEN tl.ticket_a = $1 THEN tl.ticket_b ELSE tl.ticket_a END
+       LEFT JOIN status s ON s.status_id = t.status_id
+       LEFT JOIN kunden k ON k.kundennummer = t.ticket_kundennummer
+       WHERE tl.ticket_a = $1 OR tl.ticket_b = $1
+       ORDER BY tl.created_at DESC`,
+      [ticketnr]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/tickets/:id/links
+router.post('/:id/links', async (req, res) => {
+  try {
+    const ticketnr = parseInt(req.params.id);
+    const { linked_ticketnr, link_type } = req.body;
+    if (!linked_ticketnr) return res.status(400).json({ error: 'linked_ticketnr ist erforderlich' });
+    if (ticketnr === parseInt(linked_ticketnr)) return res.status(400).json({ error: 'Ticket kann nicht mit sich selbst verknüpft werden' });
+
+    // Ensure ticket_a < ticket_b for unique constraint
+    const a = Math.min(ticketnr, parseInt(linked_ticketnr));
+    const b = Math.max(ticketnr, parseInt(linked_ticketnr));
+
+    const result = await pool.query(
+      `INSERT INTO ticket_links (ticket_a, ticket_b, link_type)
+       VALUES ($1, $2, $3) RETURNING *`,
+      [a, b, link_type || 'related']
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Verknüpfung existiert bereits' });
+    if (err.code === '23503') return res.status(404).json({ error: 'Ticket nicht gefunden' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/tickets/:id/merge – Ticket als Unter-Ticket zusammenführen
+router.post('/:id/merge', async (req, res) => {
+  try {
+    const parentId = parseInt(req.params.id);
+    const { child_ticketnr } = req.body;
+    if (!child_ticketnr) return res.status(400).json({ error: 'child_ticketnr ist erforderlich' });
+    const childId = parseInt(child_ticketnr);
+    if (parentId === childId) return res.status(400).json({ error: 'Ticket kann nicht mit sich selbst zusammengeführt werden' });
+
+    // Check both tickets exist
+    const parentCheck = await pool.query('SELECT ticketnr FROM ticket WHERE ticketnr = $1', [parentId]);
+    if (parentCheck.rows.length === 0) return res.status(404).json({ error: 'Überticket nicht gefunden' });
+
+    const childCheck = await pool.query('SELECT ticketnr, parent_ticketnr FROM ticket WHERE ticketnr = $1', [childId]);
+    if (childCheck.rows.length === 0) return res.status(404).json({ error: 'Unter-Ticket nicht gefunden' });
+    if (childCheck.rows[0].parent_ticketnr) return res.status(400).json({ error: `Ticket #${childId} ist bereits Unter-Ticket von #${childCheck.rows[0].parent_ticketnr}` });
+
+    // Prevent circular: parent can't be a child itself
+    const circularCheck = await pool.query('SELECT parent_ticketnr FROM ticket WHERE ticketnr = $1', [parentId]);
+    if (circularCheck.rows[0].parent_ticketnr) return res.status(400).json({ error: `Ticket #${parentId} ist selbst ein Unter-Ticket und kann kein Überticket sein` });
+
+    await pool.query('UPDATE ticket SET parent_ticketnr = $1 WHERE ticketnr = $2', [parentId, childId]);
+    await pool.query('UPDATE ticket SET updated_at = NOW(), "geändert_am" = NOW() WHERE ticketnr = $1', [parentId]);
+
+    res.json({ ok: true, message: `Ticket #${childId} ist jetzt Unter-Ticket von #${parentId}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/tickets/:id/unmerge – Unter-Ticket wieder lösen
+router.post('/:id/unmerge', async (req, res) => {
+  try {
+    const childId = parseInt(req.params.id);
+    const result = await pool.query(
+      'UPDATE ticket SET parent_ticketnr = NULL WHERE ticketnr = $1 RETURNING ticketnr',
+      [childId]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Ticket nicht gefunden' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/tickets/:id/links/:linkId
+router.delete('/:id/links/:linkId', async (req, res) => {
+  try {
+    const result = await pool.query('DELETE FROM ticket_links WHERE id = $1 RETURNING id', [req.params.linkId]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Verknüpfung nicht gefunden' });
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { api } from '../utils/api';
 import CustomFieldsSection from '../components/CustomFieldsSection';
 import { getKritColor, parseKategorie } from '../utils/helpers';
@@ -61,7 +61,7 @@ export default function MaschinenDetail() {
     <div className="page">
       <div className="page-header">
         <div>
-          <button className="btn btn-ghost btn-sm" onClick={() => navigate('/maschinen')} style={{ marginBottom: 8 }}>← Zurück</button>
+          <div className="breadcrumb"><Link to="/maschinen">Maschinen</Link><span className="sep">/</span><span>{maschine.maschinennr}</span></div>
           <div className="page-title">{maschine.maschinennr}</div>
           <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
             {maschine.maschinentyp_name && (

@@ -525,7 +525,7 @@ export default function KundenDetail() {
     <div className="page">
       <div className="page-header">
         <div>
-          <button className="btn btn-ghost btn-sm" onClick={() => navigate('/kunden')} style={{ marginBottom: 8 }}>← Zurück</button>
+          <div className="breadcrumb"><Link to="/kunden">Kunden</Link><span className="sep">/</span><span>{kunde.name_kunde}</span></div>
           <div className="page-title">{kunde.name_kunde}</div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
             {kunde.matchcode && (
