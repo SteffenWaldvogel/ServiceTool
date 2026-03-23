@@ -237,6 +237,15 @@ export const api = {
   getUnreadNotificationCount: () => request('/notifications/unread-count'),
   markNotificationRead: (id) => request(`/notifications/${id}/read`, { method: 'PUT' }),
   markAllNotificationsRead: () => request('/notifications/read-all', { method: 'PUT' }),
+  deleteNotification: (id) => request(`/notifications/${id}`, { method: 'DELETE' }),
+  deleteAllNotifications: () => request('/notifications', { method: 'DELETE' }),
+
+  // ── AI ─────────────────────────────────────────────────────────────────────
+  getAiStatus: () => request('/ai/status'),
+  analyzeEmail: (data) => request('/ai/analyze-email', { method: 'POST', body: JSON.stringify(data) }),
+  suggestReply: (ticketnr) => request('/ai/suggest-reply', { method: 'POST', body: JSON.stringify({ ticketnr }) }),
+  summarizeTicket: (ticketnr) => request('/ai/summarize', { method: 'POST', body: JSON.stringify({ ticketnr }) }),
+  findSimilarTickets: (data) => request('/ai/similar', { method: 'POST', body: JSON.stringify(data) }),
 
   // ── Dubletten-Matching ────────────────────────────────────────────────────
   matchKunden: (data) => request('/kunden/match', { method: 'POST', body: JSON.stringify(data) }),

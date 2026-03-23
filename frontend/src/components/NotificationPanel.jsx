@@ -9,6 +9,7 @@ const EVENT_CONFIG = {
   status_changed:   { icon: '↻', color: '#8b5cf6', label: 'Status' },
   sla_approaching:  { icon: '⏱', color: '#f59e0b', label: 'SLA Warning' },
   sla_overdue:      { icon: '!', color: '#ef4444', label: 'SLA Überfällig' },
+  high_priority:    { icon: '▲', color: '#ef4444', label: 'Hohe Priorität' },
 };
 
 function timeAgo(dateStr) {
@@ -57,10 +58,27 @@ export default function NotificationPanel() {
     }
   };
 
+  const deleteOne = async (e, n) => {
+    e.stopPropagation();
+    try {
+      await api.deleteNotification(n.notification_id);
+      setNotifications(prev => prev.filter(x => x.notification_id !== n.notification_id));
+      if (!n.is_read) setUnreadCount(c => Math.max(0, c - 1));
+    } catch {}
+  };
+
   const markAllRead = async () => {
     try {
       await api.markAllNotificationsRead();
       setNotifications(prev => prev.map(x => ({ ...x, is_read: true })));
+      setUnreadCount(0);
+    } catch {}
+  };
+
+  const deleteAll = async () => {
+    try {
+      await api.deleteAllNotifications();
+      setNotifications([]);
       setUnreadCount(0);
     } catch {}
   };
@@ -79,14 +97,17 @@ export default function NotificationPanel() {
             {collapsed ? '▸' : '▾'}
           </span>
         </span>
-        {!collapsed && unreadCount > 0 && (
-          <button
-            className="btn btn-sm btn-secondary"
-            onClick={markAllRead}
-            style={{ fontSize: 11 }}
-          >
-            Alle als gelesen
-          </button>
+        {!collapsed && notifications.length > 0 && (
+          <div style={{ display: 'flex', gap: 6 }}>
+            {unreadCount > 0 && (
+              <button className="btn btn-sm btn-secondary" onClick={markAllRead} style={{ fontSize: 11 }}>
+                Alle gelesen
+              </button>
+            )}
+            <button className="btn btn-sm btn-ghost" onClick={deleteAll} style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              Alle löschen
+            </button>
+          </div>
         )}
       </div>
 
@@ -117,13 +138,29 @@ export default function NotificationPanel() {
                       {n.title}
                     </div>
                     {n.message && (
-                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {n.message}
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 3, lineHeight: 1.4 }}>
+                        {n.message.split(' | ').slice(0, 3).map((part, i) => (
+                          <span key={i} style={{ marginRight: 8 }}>
+                            {part.includes(':')
+                              ? <><span style={{ color: 'var(--text-muted)' }}>{part.split(':')[0]}:</span> {part.split(':').slice(1).join(':').trim()}</>
+                              : part
+                            }
+                            {i < Math.min(n.message.split(' | ').length, 3) - 1 && <span style={{ color: 'var(--border)', margin: '0 2px' }}>·</span>}
+                          </span>
+                        ))}
                       </div>
                     )}
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'nowrap', marginLeft: 8 }}>
-                    {timeAgo(n.created_at)}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 8, flexShrink: 0 }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                      {timeAgo(n.created_at)}
+                    </span>
+                    <button
+                      className="btn btn-ghost btn-sm btn-icon"
+                      onClick={(e) => deleteOne(e, n)}
+                      title="Löschen"
+                      style={{ fontSize: 11, color: 'var(--text-muted)', padding: '2px 4px', minWidth: 0 }}
+                    >✕</button>
                   </div>
                 </div>
               );

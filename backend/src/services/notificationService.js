@@ -28,14 +28,15 @@ async function sendEmailNotification(userId, eventType, title, message) {
 
     // Lazy-require to avoid circular dependency
     const nodemailer = require('nodemailer');
-    const smtpUser = process.env.GMAIL_USER || process.env.SMTP_USER;
-    const smtpPass = process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS;
+    const smtpUser = process.env.SMTP_USER || process.env.GMAIL_USER;
+    const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
     if (!smtpUser || !smtpPass) return;
 
+    const smtpPort = parseInt(process.env.SMTP_PORT || '465');
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: parseInt(process.env.SMTP_PORT || '587'),
-      secure: false,
+      port: smtpPort,
+      secure: smtpPort === 465,
       auth: { user: smtpUser, pass: smtpPass }
     });
 
@@ -46,7 +47,18 @@ async function sendEmailNotification(userId, eventType, title, message) {
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px;">
           <h3 style="color: #1e293b; margin-bottom: 8px;">${title}</h3>
-          ${message ? `<p style="color: #475569;">${message}</p>` : ''}
+          ${message ? (() => {
+            // Render pipe-separated details as a table
+            const parts = message.split(' | ').filter(Boolean);
+            if (parts.length > 1 && parts[0].includes(':')) {
+              const rows = parts.map(p => {
+                const [key, ...val] = p.split(': ');
+                return `<tr><td style="padding:4px 12px 4px 0;font-weight:600;color:#1e293b;white-space:nowrap;">${key}</td><td style="padding:4px 0;color:#475569;">${val.join(': ')}</td></tr>`;
+              }).join('');
+              return `<table style="border-collapse:collapse;margin:12px 0;">${rows}</table>`;
+            }
+            return `<p style="color: #475569;">${message}</p>`;
+          })() : ''}
           <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 16px 0;" />
           <p style="font-size: 12px; color: #94a3b8;">
             Diese Benachrichtigung wurde vom ServiceTool gesendet.

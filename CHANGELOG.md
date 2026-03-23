@@ -8,6 +8,31 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [UNRELEASED]
 
+### Added (Session 18)
+- Notification System: per-User Benachrichtigungen bei Ticket-Zuweisung, neuen Tickets, Status-Änderung, SLA-Warnung, ungematchten Emails, hoher Priorität
+- NotificationPanel auf Dashboard: kollapierbarer Feed mit Löschen (einzeln + alle), Als-gelesen-markieren, Click-Through-Navigation
+- Sidebar-Badge für ungelesene Benachrichtigungen (60s Polling)
+- Email-Benachrichtigungen: User mit Email + aktivierten Präferenzen erhalten HTML-Email-Alerts
+- User-Kontaktdaten: Email + Telefon auf users-Tabelle (Migration 010)
+- 6 per-User Notification-Präferenzen (Checkbox-Grid in BenutzerPage)
+- Detaillierte Notification-Nachrichten: Kunde, Maschine, Kategorie, Kritikalität, Status, SLA, Betreff
+- Ticket-Erstellung: Bestätigungsmail standardmäßig aktiviert
+- Ticket-Erstellung: "Erstellt von" ist jetzt User-Dropdown (Admin ausgeschlossen)
+- Email-Setup: Generische IMAP/SMTP-Konfiguration (one.com statt Gmail-only)
+- IMAP-Fix: Buffer statt UTF-8 String für korrekte Binär-Anhänge (PDFs, Bilder)
+- Anhänge im Posteingang: unmatched_email_attachments-Tabelle (Migration 011), Anhänge werden bei Zuweisung an Ticket übertragen
+- Posteingang komplett neu: Master-Detail-Layout, voller Email-Inhalt, Side-by-Side Ticket-Erstellung
+- QuickCreate in Posteingang: Kunde, Maschine, Ansprechpartner inline anlegen beim Ticket-Erstellen
+- Attachment-Viewer: PDFs und Bilder öffnen im neuen Tab via Blob-URL (fetch mit credentials)
+- ReplyBox als Modal: Antwort-Dialog erscheint zentriert statt am Ende des Threads
+- Claude AI Integration (Phase 2): @anthropic-ai/sdk, aiService.js, routes/ai.js
+- KI Email-Analyse: automatisch bei ungematchten Emails (Haiku), manuell via "KI-Analyse" Button
+- KI Antwort-Vorschlag: "KI-Antwort" Button in TicketDetail (Sonnet), füllt ReplyBox vor
+- KI Zusammenfassung: "Zusammenfassung" Button in TicketDetail (Haiku)
+- KI Ähnliche Tickets: API-Endpoint /api/ai/similar
+- Vorschläge übernehmen: KI-Vorschlag-Karte im Posteingang füllt Ticket-Formular automatisch vor
+- Cleanup: UnmatchedEmailsPanel.jsx entfernt (orphaned), GMAIL_USER-Referenz korrigiert, CLAUDE.md aktualisiert
+
 ### Added (Session 17)
 - Email-Anhänge: Anhänge aus IMAP-Emails werden gespeichert und in der Nachrichtenansicht angezeigt
 - Import-Seite: CSV/Excel-Import für Kunden, Maschinen und andere Entitäten (Upload, Preview, Feld-Mapping, Execute)

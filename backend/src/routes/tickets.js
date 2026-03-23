@@ -5,6 +5,20 @@ const { sendConfirmationEmail } = require('../services/emailService');
 const { createNotification, notifyUsersByRole, notifyHighPriority } = require('../services/notificationService');
 const buildQuery = require('../utils/queryBuilder');
 
+// Build a detailed notification message from a full ticket row
+function buildTicketSummary(t) {
+  const parts = [];
+  if (t.kunden_name) parts.push(`Kunde: ${t.kunden_name}`);
+  if (t.maschine_maschinennr) parts.push(`Maschine: ${t.maschine_maschinennr}${t.maschine_typ ? ` (${t.maschine_typ})` : ''}`);
+  if (t.kategorie_name) parts.push(`Kategorie: ${t.kategorie_name}`);
+  if (t.kritikalitaet_name) parts.push(`Kritikalität: ${t.kritikalitaet_name}`);
+  if (t.status_name) parts.push(`Status: ${t.status_name}`);
+  if (t.sla_priority_name) parts.push(`SLA: ${t.sla_priority_name}`);
+  const betreff = t.betreff?.split('\n')[0]?.slice(0, 80);
+  if (betreff) parts.push(`Betreff: ${betreff}`);
+  return parts.join(' | ');
+}
+
 const TICKET_FILTERS = {
   status_id:           { type: 'in',        col: 't.status_id' },
   kategorie_id:        { type: 'in',        col: 't.kategorie_id' },
@@ -87,9 +101,38 @@ const TICKET_SELECT = `
 router.get('/unmatched', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM unmatched_emails ORDER BY received_at DESC LIMIT 100');
+    // Attach attachment metadata (without content)
+    for (const row of result.rows) {
+      try {
+        const atts = await pool.query(
+          'SELECT id, filename, mime_type, size_bytes FROM unmatched_email_attachments WHERE unmatched_email_id = $1',
+          [row.id]
+        );
+        row.attachments = atts.rows;
+      } catch {
+        row.attachments = [];
+      }
+    }
     res.json(result.rows);
   } catch (err) {
     if (err.code === '42P01') return res.json([]);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/tickets/unmatched/attachments/:attachmentId
+router.get('/unmatched/attachments/:attachmentId', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT filename, mime_type, content FROM unmatched_email_attachments WHERE id = $1',
+      [req.params.attachmentId]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Anhang nicht gefunden' });
+    const { filename, mime_type, content } = result.rows[0];
+    res.set('Content-Type', mime_type || 'application/octet-stream');
+    res.set('Content-Disposition', `inline; filename="${encodeURIComponent(filename)}"`);
+    res.send(content);
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
@@ -103,10 +146,23 @@ router.post('/unmatched/:id/assign', async (req, res) => {
     const emailRow = await pool.query('SELECT * FROM unmatched_emails WHERE id = $1', [req.params.id]);
     if (emailRow.rows.length === 0) return res.status(404).json({ error: 'Email nicht gefunden' });
 
+    // Fetch attachments before deleting the unmatched email
+    const attRows = await pool.query(
+      'SELECT filename, mime_type, size_bytes, content FROM unmatched_email_attachments WHERE unmatched_email_id = $1',
+      [req.params.id]
+    );
+    const attachments = attRows.rows.map(a => ({
+      filename: a.filename,
+      contentType: a.mime_type,
+      size: a.size_bytes,
+      content: a.content,
+    }));
+
     const { addMessageToTicket } = require('../services/emailService');
-    const msg = await addMessageToTicket(ticketnr, emailRow.rows[0].from_email, emailRow.rows[0].from_name, emailRow.rows[0].message, 'email');
+    const msg = await addMessageToTicket(ticketnr, emailRow.rows[0].from_email, emailRow.rows[0].from_name, emailRow.rows[0].message, 'email', attachments);
     if (!msg) return res.status(404).json({ error: 'Ticket nicht gefunden' });
 
+    // CASCADE deletes unmatched_email_attachments too
     await pool.query('DELETE FROM unmatched_emails WHERE id = $1', [req.params.id]);
     res.status(201).json(msg);
   } catch (err) {
@@ -178,11 +234,14 @@ router.put('/bulk', async (req, res) => {
     try {
       if (assigned_to) {
         for (const row of result.rows) {
+          // Fetch full ticket data for detailed message
+          const fullRow = await pool.query(`${TICKET_SELECT} WHERE t.ticketnr = $1`, [row.ticketnr]);
+          const summary = fullRow.rows[0] ? buildTicketSummary(fullRow.rows[0]) : null;
           createNotification({
             userId: assigned_to,
             eventType: 'ticket_assigned',
             title: `Ticket #${row.ticketnr} zugewiesen`,
-            message: null,
+            message: summary,
             referenceType: 'ticket',
             referenceId: row.ticketnr
           });
@@ -480,11 +539,12 @@ router.post('/', async (req, res) => {
 
     // Notifications (after response, non-blocking)
     try {
-      const betreffShort = (betreff || '').split('\n')[0].slice(0, 80);
+      const t = full.rows[0];
+      const summary = buildTicketSummary(t);
       notifyUsersByRole('admin', {
         eventType: 'ticket_created',
         title: `Neues Ticket #${ticket.ticketnr}`,
-        message: betreffShort || null,
+        message: summary,
         referenceType: 'ticket',
         referenceId: ticket.ticketnr
       });
@@ -493,18 +553,18 @@ router.post('/', async (req, res) => {
           userId: assigned_to,
           eventType: 'ticket_assigned',
           title: `Ticket #${ticket.ticketnr} zugewiesen`,
-          message: betreffShort || null,
+          message: summary,
           referenceType: 'ticket',
           referenceId: ticket.ticketnr
         });
       }
       // High priority notification
-      const kritGewichtung = full.rows[0]?.kritikalitaet_gewichtung;
+      const kritGewichtung = t?.kritikalitaet_gewichtung;
       if (kritGewichtung >= 3) {
         notifyHighPriority(
           ticket.ticketnr,
           `Hohe Priorität: Ticket #${ticket.ticketnr}`,
-          `${full.rows[0]?.kritikalitaet_name || 'High'} — ${betreffShort || '(kein Betreff)'}`,
+          summary,
           assigned_to || null
         );
       }
@@ -587,13 +647,16 @@ router.put('/:id', async (req, res) => {
       const ticketnr = parseInt(req.params.id);
       const newAssigned = assigned_to !== undefined ? (assigned_to || null) : null;
 
+      const t = full.rows[0];
+      const summary = buildTicketSummary(t);
+
       // Ticket assigned to someone new
       if (newAssigned && newAssigned !== oldAssigned) {
         createNotification({
           userId: newAssigned,
           eventType: 'ticket_assigned',
           title: `Ticket #${ticketnr} zugewiesen`,
-          message: full.rows[0]?.betreff?.split('\n')[0]?.slice(0, 80) || null,
+          message: summary,
           referenceType: 'ticket',
           referenceId: ticketnr
         });
@@ -603,12 +666,11 @@ router.put('/:id', async (req, res) => {
       if (status_id && parseInt(status_id) !== oldStatus) {
         const finalAssigned = newAssigned || oldAssigned;
         if (finalAssigned && finalAssigned !== currentUserId) {
-          const statusName = full.rows[0]?.status_name || 'geändert';
           createNotification({
             userId: finalAssigned,
             eventType: 'status_changed',
-            title: `Ticket #${ticketnr}: Status → ${statusName}`,
-            message: null,
+            title: `Ticket #${ticketnr}: Status → ${t?.status_name || 'geändert'}`,
+            message: summary,
             referenceType: 'ticket',
             referenceId: ticketnr
           });
@@ -750,7 +812,9 @@ router.post('/:id/reply', async (req, res) => {
     const ticketCheck = await pool.query('SELECT ticketnr FROM ticket WHERE ticketnr = $1', [req.params.id]);
     if (ticketCheck.rows.length === 0) return res.status(404).json({ error: 'Ticket nicht gefunden' });
 
-    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+    const mailUser = process.env.SMTP_USER || process.env.GMAIL_USER;
+    const mailPass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
+    if (!mailUser || !mailPass) {
       // Email nicht konfiguriert – nur als Notiz speichern
       const result = await pool.query(
         `INSERT INTO ticket_messages (ticketnr, from_email, from_name, message, message_type, is_internal)

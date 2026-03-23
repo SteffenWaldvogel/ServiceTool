@@ -12,3 +12,4 @@ logs/
 backups/
 frontend/dist/
 mail.txt
+key.txt

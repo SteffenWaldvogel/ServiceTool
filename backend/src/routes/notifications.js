@@ -81,4 +81,28 @@ router.put('/read-all', async (req, res) => {
   }
 });
 
+// DELETE /api/notifications/:id
+router.delete('/:id', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'DELETE FROM notifications WHERE notification_id = $1 AND user_id = $2 RETURNING notification_id',
+      [req.params.id, req.session.user.user_id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Benachrichtigung nicht gefunden' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/notifications – delete all for current user
+router.delete('/', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM notifications WHERE user_id = $1', [req.session.user.user_id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../utils/api';
 
-export default function ReplyBox({ ticketnr, defaultToEmail, defaultToName, onSent, onClose, initialInternal = false }) {
+export default function ReplyBox({ ticketnr, defaultToEmail, defaultToName, onSent, onClose, initialInternal = false, initialMessage = '' }) {
   const [isInternal, setIsInternal] = useState(initialInternal);
   const [toEmail, setToEmail] = useState(defaultToEmail || '');
   const [subject, setSubject] = useState(`[Ticket #${ticketnr}] Re:`);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState(initialMessage);
   const [sentBy, setSentBy] = useState(() => localStorage.getItem('technician_name') || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -56,57 +56,65 @@ export default function ReplyBox({ ticketnr, defaultToEmail, defaultToName, onSe
   };
 
   return (
-    <div className="card" style={{ marginTop: 12, border: '1px solid var(--border)' }}>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-        <button
-          type="button"
-          className={`btn btn-sm ${!isInternal ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={() => setIsInternal(false)}
-        >&#9993; Als Email senden</button>
-        <button
-          type="button"
-          className={`btn btn-sm ${isInternal ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={() => setIsInternal(true)}
-        >&#128274; Interne Notiz</button>
-        <button type="button" className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto' }} onClick={onClose}>&#x2715;</button>
-      </div>
-      {error && <div className="error-banner" style={{ marginBottom: 8 }}>{error}</div>}
-      <form onSubmit={submit}>
-        <div className="grid-2">
-          {!isInternal && (
-            <>
-              <div className="form-group">
-                <label className="form-label">An (Email)</label>
-                <input className="form-control" value={toEmail} onChange={e => setToEmail(e.target.value)} placeholder="kunde@beispiel.de" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Betreff</label>
-                <input className="form-control" value={subject} onChange={e => setSubject(e.target.value)} />
-              </div>
-            </>
-          )}
-          <div className="form-group">
-            <label className="form-label">Mein Name</label>
-            <input className="form-control" value={sentBy} onChange={e => setSentBy(e.target.value)} placeholder="Techniker-Name" />
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 600 }}>
+        <div className="modal-header">
+          <div className="modal-title">
+            {isInternal ? 'Interne Notiz' : 'Antwort senden'} — Ticket #{ticketnr}
           </div>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}>&#x2715;</button>
         </div>
-        <div className="form-group">
-          <label className="form-label">Nachricht *</label>
-          <textarea
-            className="form-control"
-            rows={4}
-            value={message}
-            onChange={e => setMessage(e.target.value)}
-            placeholder={isInternal ? 'Interne Notiz (nicht sichtbar für Kunden)…' : 'Antwort an Kunden…'}
-          />
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <button
+            type="button"
+            className={`btn btn-sm ${!isInternal ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setIsInternal(false)}
+          >&#9993; Als Email senden</button>
+          <button
+            type="button"
+            className={`btn btn-sm ${isInternal ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setIsInternal(true)}
+          >&#128274; Interne Notiz</button>
         </div>
-        <div className="modal-footer" style={{ padding: 0, marginTop: 8 }}>
-          <button type="button" className="btn btn-secondary" onClick={onClose}>Abbrechen</button>
-          <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? 'Senden…' : isInternal ? 'Notiz speichern' : 'Senden'}
-          </button>
-        </div>
-      </form>
+        {error && <div className="error-banner" style={{ marginBottom: 8 }}>{error}</div>}
+        <form onSubmit={submit}>
+          <div className="grid-2">
+            {!isInternal && (
+              <>
+                <div className="form-group">
+                  <label className="form-label">An (Email)</label>
+                  <input className="form-control" value={toEmail} onChange={e => setToEmail(e.target.value)} placeholder="kunde@beispiel.de" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Betreff</label>
+                  <input className="form-control" value={subject} onChange={e => setSubject(e.target.value)} />
+                </div>
+              </>
+            )}
+            <div className="form-group">
+              <label className="form-label">Mein Name</label>
+              <input className="form-control" value={sentBy} onChange={e => setSentBy(e.target.value)} placeholder="Techniker-Name" />
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Nachricht *</label>
+            <textarea
+              className="form-control"
+              rows={5}
+              value={message}
+              onChange={e => setMessage(e.target.value)}
+              placeholder={isInternal ? 'Interne Notiz (nicht sichtbar für Kunden)…' : 'Antwort an Kunden…'}
+              autoFocus
+            />
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary" onClick={onClose}>Abbrechen</button>
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              {loading ? 'Senden…' : isInternal ? 'Notiz speichern' : 'Senden'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

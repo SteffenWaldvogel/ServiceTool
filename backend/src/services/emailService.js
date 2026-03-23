@@ -6,13 +6,17 @@ require('dotenv').config();
 const pool = require('../config/database');
 
 // ─── SMTP Transport ───────────────────────────────────────────────────────────
+const MAIL_USER = process.env.SMTP_USER || process.env.GMAIL_USER;
+const MAIL_PASS = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || '465');
+
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: false,
+  port: SMTP_PORT,
+  secure: SMTP_PORT === 465,
   auth: {
-    user: process.env.GMAIL_USER || process.env.SMTP_USER,
-    pass: process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS
+    user: MAIL_USER,
+    pass: MAIL_PASS
   }
 });
 
@@ -53,7 +57,7 @@ async function addMessageToTicket(ticketnr, fromEmail, fromName, messageText, me
 async function sendTicketReply({ ticketnr, toEmail, toName, subject, htmlBody, textBody, sentBy }) {
   const finalSubject = subject || `[Ticket #${ticketnr}] Rückmeldung vom Service`;
   const info = await transporter.sendMail({
-    from: `"Service" <${process.env.GMAIL_USER}>`,
+    from: process.env.SMTP_FROM || `"Service" <${MAIL_USER}>`,
     to: toEmail,
     subject: finalSubject,
     text: textBody,
@@ -63,16 +67,16 @@ async function sendTicketReply({ ticketnr, toEmail, toName, subject, htmlBody, t
       'X-Ticket-ID': String(ticketnr),
     }
   });
-  await addMessageToTicket(ticketnr, process.env.GMAIL_USER, sentBy || 'Service', textBody || htmlBody, 'technician');
+  await addMessageToTicket(ticketnr, MAIL_USER, sentBy || 'Service', textBody || htmlBody, 'technician');
   console.log(`📤 Reply zu Ticket #${ticketnr} gesendet an ${toEmail}`);
   return info;
 }
 
 // ─── sendConfirmationEmail ────────────────────────────────────────────────────
 async function sendConfirmationEmail(toEmail, ticket) {
-  if (!process.env.GMAIL_USER && !process.env.SMTP_USER) return;
+  if (!MAIL_USER) return;
   await transporter.sendMail({
-    from: process.env.SMTP_FROM || process.env.GMAIL_USER || process.env.SMTP_USER,
+    from: process.env.SMTP_FROM || MAIL_USER,
     to: toEmail,
     subject: `[Ticket #${ticket.ticketnr}] Ihr Service-Ticket wurde erstellt`,
     html: `
@@ -186,11 +190,43 @@ async function processIncomingEmail(parsed, rawText) {
     }
 
     // STUFE 3: Kein Match → in unmatched_emails speichern
-    await pool.query(
-      'INSERT INTO unmatched_emails (from_email, from_name, subject, message) VALUES ($1, $2, $3, $4)',
+    const unmatchedResult = await pool.query(
+      'INSERT INTO unmatched_emails (from_email, from_name, subject, message) VALUES ($1, $2, $3, $4) RETURNING id',
       [fromAddress, fromName, subject, messageText.slice(0, 5000)]
     );
-    console.log(`📨 Email von ${fromAddress}: kein Match → unmatched_emails`);
+    const unmatchedId = unmatchedResult.rows[0].id;
+
+    // Save attachments for unmatched email
+    for (const att of attachments) {
+      try {
+        await pool.query(
+          `INSERT INTO unmatched_email_attachments (unmatched_email_id, filename, mime_type, size_bytes, content)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [unmatchedId, att.filename, att.contentType, att.size, att.content]
+        );
+        console.log(`📎 Unmatched-Anhang gespeichert: ${att.filename} (${att.size} bytes)`);
+      } catch (attErr) {
+        console.error(`⚠️ Unmatched-Anhang-Fehler: ${attErr.message}`);
+      }
+    }
+    console.log(`📨 Email von ${fromAddress}: kein Match → unmatched_emails (${attachments.length} Anhänge)`);
+
+    // AI analysis (non-blocking)
+    try {
+      const { isEnabled, analyzeEmail } = require('./aiService');
+      if (isEnabled()) {
+        const suggestion = await analyzeEmail({ fromEmail: fromAddress, fromName, subject, message: messageText });
+        if (suggestion) {
+          await pool.query(
+            'UPDATE unmatched_emails SET ai_suggestion = $1 WHERE id = $2',
+            [JSON.stringify(suggestion), unmatchedId]
+          );
+          console.log(`🤖 KI-Analyse gespeichert für unmatched email #${unmatchedId}`);
+        }
+      }
+    } catch (aiErr) {
+      console.error('[AI] Fehler bei Email-Analyse:', aiErr.message);
+    }
 
     // Notify admins about unmatched email
     try {
@@ -218,12 +254,13 @@ function fetchUnseen(imap) {
 
     const fetch = imap.fetch(results, { bodies: '', markSeen: true });
     fetch.on('message', (msg) => {
-      let buffer = '';
+      const chunks = [];
       msg.on('body', (stream) => {
-        stream.on('data', (chunk) => { buffer += chunk.toString('utf8'); });
+        stream.on('data', (chunk) => { chunks.push(chunk); });
         stream.once('end', async () => {
-          const parsed = await simpleParser(buffer).catch(() => null);
-          if (parsed) await processIncomingEmail(parsed, buffer);
+          const fullBuffer = Buffer.concat(chunks);
+          const parsed = await simpleParser(fullBuffer).catch(() => null);
+          if (parsed) await processIncomingEmail(parsed, fullBuffer);
         });
       });
     });
@@ -235,17 +272,22 @@ let pollingInterval = null;
 let imapConnection = null;
 
 function startEmailPolling() {
-  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
-    console.log('[Email] GMAIL_USER oder GMAIL_APP_PASSWORD nicht gesetzt – Email-Polling deaktiviert.');
+  const imapUser = process.env.IMAP_USER || process.env.SMTP_USER || process.env.GMAIL_USER;
+  const imapPass = process.env.IMAP_PASS || process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
+  const imapHost = process.env.IMAP_HOST || 'imap.gmail.com';
+  const imapPort = parseInt(process.env.IMAP_PORT || '993');
+
+  if (!imapUser || !imapPass) {
+    console.log('[Email] Keine IMAP-Zugangsdaten gesetzt – Email-Polling deaktiviert.');
     return;
   }
 
   const connectAndPoll = () => {
     const imap = new Imap({
-      user: process.env.GMAIL_USER,
-      password: process.env.GMAIL_APP_PASSWORD,
-      host: 'imap.gmail.com',
-      port: 993,
+      user: imapUser,
+      password: imapPass,
+      host: imapHost,
+      port: imapPort,
       tls: true,
       tlsOptions: { rejectUnauthorized: false }
     });

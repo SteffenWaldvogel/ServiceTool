@@ -15,32 +15,43 @@ ServiceTool/
 │   │   ├── config/
 │   │   │   ├── database.js        # pg Pool
 │   │   │   └── seed.sql           # Stammdaten-Seed (idempotent)
+│   │   ├── middleware/
+│   │   │   ├── auth.js            # requireAuth + requireAdmin
+│   │   │   └── validate.js        # express-validator Middleware
 │   │   ├── routes/
-│   │   │   ├── tickets.js         # CRUD /api/tickets + messages
+│   │   │   ├── tickets.js         # CRUD /api/tickets + messages + links + merge + bulk + export + unmatched
 │   │   │   ├── kunden.js          # CRUD /api/kunden (mit Emails/Telefon in Transaktion)
-│   │   │   ├── lookup.js          # Stammdaten + /api/lookup/dashboard-stats
+│   │   │   ├── lookup.js          # Stammdaten + /api/lookup/dashboard-stats + users
 │   │   │   ├── maschinen.js       # CRUD /api/maschinen (global)
 │   │   │   ├── maschinentypen.js  # CRUD /api/maschinentypen
 │   │   │   ├── ersatzteile.js     # CRUD /api/ersatzteile + Kompatibilität
 │   │   │   ├── ansprechpartner.js # Standalone CRUD /api/ansprechpartner
-│   │   │   ├── stammdaten.js      # Admin-CRUD Referenzdaten (Abteilung, Position, etc.)
+│   │   │   ├── stammdaten.js      # Admin-CRUD Referenzdaten + RBAC (Roles/Permissions)
 │   │   │   ├── customFieldsAdmin.js # Admin-CRUD custom_field_definitions + options
-│   │   │   └── system.js          # GET /api/system/audit-log
+│   │   │   ├── system.js          # GET /api/system/audit-log
+│   │   │   ├── auth.js            # Login/Logout/Me/Change-Password
+│   │   │   ├── users.js           # Admin-CRUD Benutzer (email, telefon, notify prefs)
+│   │   │   ├── import.js          # CSV/Excel Import (upload, preview, execute)
+│   │   │   └── notifications.js   # CRUD Benachrichtigungen (read/delete/unread-count)
 │   │   ├── services/
-│   │   │   ├── emailService.js    # IMAP polling + SMTP
-│   │   │   └── matchingService.js # Levenshtein-Dubletten-Matching
+│   │   │   ├── emailService.js    # IMAP polling + SMTP (generic, one.com/Gmail)
+│   │   │   ├── matchingService.js # Levenshtein-Dubletten-Matching
+│   │   │   └── notificationService.js # Notification creation + email alerts + SLA check
 │   │   └── utils/
 │   │       └── queryBuilder.js    # Generic filter/sort/pagination builder
+│   ├── migrations/                # 003–011 (sequential)
 │   ├── .env.example
 │   └── package.json
 ├── frontend/
 │   ├── src/
-│   │   ├── App.jsx                # Router + Sidebar layout
+│   │   ├── App.jsx                # Router + Sidebar layout + Auth guard + polling
 │   │   ├── main.jsx
+│   │   ├── context/
+│   │   │   └── AuthContext.jsx    # React Context (user, login, logout, hasPermission)
 │   │   ├── pages/
-│   │   │   ├── Dashboard.jsx      # Stat tiles + charts + recent tickets
-│   │   │   ├── TicketList.jsx     # Table, filter/sort/pagination, create modal
-│   │   │   ├── TicketDetail.jsx   # Inline editing + messages + Kunde sidebar
+│   │   │   ├── Dashboard.jsx      # Stat tiles + charts + NotificationPanel
+│   │   │   ├── TicketList.jsx     # Table, filter/sort/pagination, create modal + QuickCreate
+│   │   │   ├── TicketDetail.jsx   # Inline editing + messages + Kunde sidebar + links + merge
 │   │   │   ├── KundenList.jsx     # Filter/sort/pagination + ticket counter
 │   │   │   ├── KundenDetail.jsx   # Stammdaten, Inline-AP-Form, Inline-Maschinen-Form, Tickets
 │   │   │   ├── MaschinenList.jsx  # Filter/sort/pagination + CRUD
@@ -49,38 +60,58 @@ ServiceTool/
 │   │   │   ├── ErsatzteileDetail.jsx # Kompatibilität Baujahr + Nummer
 │   │   │   ├── AnsprechpartnerList.jsx # Filter/sort/pagination
 │   │   │   ├── AnsprechpartnerDetail.jsx # Inline-edit + Kunde-Sidebar
-│   │   │   ├── StammdatenPage.jsx # Tabbed admin für alle Referenzdaten
-│   │   │   └── SystemPage.jsx     # Audit-Log Viewer
+│   │   │   ├── StammdatenPage.jsx # Tabbed admin für alle Referenzdaten + Rollen & Rechte
+│   │   │   ├── SystemPage.jsx     # Audit-Log Viewer
+│   │   │   ├── LoginPage.jsx      # Login mit Show/Hide Passwort
+│   │   │   ├── BenutzerPage.jsx   # Admin-CRUD Benutzer + Passwort ändern
+│   │   │   ├── ImportPage.jsx     # CSV/Excel Import mit Feld-Mapping
+│   │   │   └── PosteingangPage.jsx# Ungematchte Emails: Detail + Ticket erstellen/zuweisen
 │   │   ├── components/
 │   │   │   ├── CustomFieldsSection.jsx # Freifelder pro Entity
-│   │   │   ├── QuickCreate.jsx    # Searchable dropdown + Inline-Anlegen
+│   │   │   ├── QuickCreate.jsx    # Searchable dropdown + Inline-Anlegen + Duplikatcheck
 │   │   │   ├── DuplicateWarning.jsx # Dubletten-Warnung mit Score
 │   │   │   ├── FilterBar.jsx      # Primary + Advanced Filter mit Chips
-│   │   │   └── SortableHeader.jsx # Sortierbare Spaltenköpfe
+│   │   │   ├── SortableHeader.jsx # Sortierbare Spaltenköpfe
+│   │   │   ├── MessageThread.jsx  # Chronologischer Nachrichten-Thread + Anhänge
+│   │   │   ├── ReplyBox.jsx       # Email-Reply + interne Notizen (Modal)
+│   │   │   └── NotificationPanel.jsx # Benachrichtigungs-Feed im Dashboard
 │   │   ├── hooks/
 │   │   │   └── useFilter.js       # Filter/Sort/Pagination State Hook
 │   │   ├── utils/
 │   │   │   ├── api.js             # fetch wrapper für alle API-Calls
-│   │   │   └── helpers.js         # getKritColor, parseKategorie
+│   │   │   └── helpers.js         # getKritColor, parseKategorie, getSlaStatus, getSlaLabel
 │   │   └── styles/global.css      # Dark industrial theme
 │   ├── index.html
 │   ├── vite.config.js             # proxy /api → :3001
 │   └── package.json
+├── nginx/
+│   └── nginx.conf                 # Reverse Proxy + SPA-Fallback
+├── scripts/
+│   ├── git-sync.sh / .ps1        # One-command commit+push
+│   ├── backup.ps1                 # pg_dump + gzip + cleanup
+│   └── deploy.ps1                 # Build + PM2 reload
 ├── docs/
-│   └── DB_COVERAGE.md             # Tabellen-Coverage-Matrix
+│   ├── ACD_v3.md                  # Architecture Concept Document v3
+│   ├── DB_COVERAGE.md             # Tabellen-Coverage-Matrix
+│   └── DEPLOYMENT.md              # Produktions-Setup-Anleitung
 ├── database_schema.sql            # PostgreSQL schema + seed data
+├── ecosystem.config.js            # PM2-Konfiguration
 ├── CHANGELOG.md
 ├── DEVLOG.md
+├── CLEANUP_NOTES.md
 ├── package.json                   # root scripts: dev:backend, dev:frontend
 ├── .gitignore
 └── CLAUDE.md
 ```
 
 ## Database Tables
-`ticket`, `ticket_messages`, `kunden`, `kunden_emails`, `kunden_telefonnummern`, `ansprechpartner`,
+`ticket`, `ticket_messages`, `message_attachments`, `ticket_links`,
+`kunden`, `kunden_emails`, `kunden_telefonnummern`, `ansprechpartner`,
 `maschine`, `maschinentyp`, `kategorie`, `kritikalität`, `status`, `service_priority`,
 `abteilung`, `position`, `ersatzteile`, `ersatzteile_maschinentyp_baujahr`, `ersatzteile_maschinentyp_nummer`,
-`custom_field_definitions`, `custom_field_options`, plus 5 custom-field entity tables, `audit_log`
+`custom_field_definitions`, `custom_field_options`, plus 5 custom-field entity tables,
+`users`, `user_sessions`, `roles`, `permissions`, `role_permissions`,
+`notifications`, `unmatched_emails`, `unmatched_email_attachments`, `audit_log`
 
 ## Setup
 

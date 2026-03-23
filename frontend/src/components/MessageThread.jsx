@@ -17,6 +17,16 @@ function isImageType(mimeType) {
   return mimeType && mimeType.startsWith('image/');
 }
 
+function isPdfType(mimeType) {
+  return mimeType === 'application/pdf';
+}
+
+function getAttachmentIcon(mimeType) {
+  if (isImageType(mimeType)) return '🖼';
+  if (isPdfType(mimeType)) return '📄';
+  return '📎';
+}
+
 const MessageThread = React.memo(function MessageThread({ messages = [], onMoveMessage }) {
   if (messages.length === 0) {
     return (
@@ -102,28 +112,47 @@ const MessageThread = React.memo(function MessageThread({ messages = [], onMoveM
             {attachments.length > 0 && (
               <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {attachments.map(att => (
-                  <a
+                  <button
                     key={att.id}
-                    href={`/api/tickets/attachments/${att.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    type="button"
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      try {
+                        const res = await fetch(`/api/tickets/attachments/${att.id}`, { credentials: 'include' });
+                        if (!res.ok) throw new Error('Download fehlgeschlagen');
+                        const blob = await res.blob();
+                        const url = URL.createObjectURL(blob);
+                        // PDFs and images: open in new tab; others: download
+                        if (isPdfType(att.mime_type) || isImageType(att.mime_type)) {
+                          window.open(url, '_blank');
+                        } else {
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = att.filename;
+                          a.click();
+                        }
+                        setTimeout(() => URL.revokeObjectURL(url), 60000);
+                      } catch (err) {
+                        console.error('Anhang-Fehler:', err);
+                      }
+                    }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 6,
                       padding: '6px 10px', borderRadius: 6,
                       background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)',
-                      color: 'var(--accent)', textDecoration: 'none', fontSize: 12,
+                      color: 'var(--accent)', cursor: 'pointer', fontSize: 12,
                       maxWidth: 280, overflow: 'hidden',
                     }}
-                    title={`${att.filename} (${formatSize(att.size_bytes)})`}
+                    title={`${att.filename} (${formatSize(att.size_bytes)}) — Klicken zum Öffnen`}
                   >
-                    <span>{isImageType(att.mime_type) ? '🖼' : '📎'}</span>
+                    <span>{getAttachmentIcon(att.mime_type)}</span>
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {att.filename}
                     </span>
                     {att.size_bytes > 0 && (
                       <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>({formatSize(att.size_bytes)})</span>
                     )}
-                  </a>
+                  </button>
                 ))}
               </div>
             )}

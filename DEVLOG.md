@@ -4,6 +4,42 @@ Chronological log of development sessions for the Service Tool project.
 
 ---
 
+## Session 18 – 2026-03-23
+**Ziel:** Notification System, User-Kontakt, Email-Setup, Posteingang-Redesign, Anhänge-Fix, Claude AI Integration
+**Scope:** Migrations 009–011, notificationService.js, aiService.js, routes/notifications.js, routes/ai.js, server.js, tickets.js, emailService.js, users.js, lookup.js, App.jsx, Dashboard.jsx, TicketDetail.jsx, PosteingangPage.jsx, BenutzerPage.jsx, TicketList.jsx, ReplyBox.jsx, MessageThread.jsx, NotificationPanel.jsx, api.js, global.css
+
+### Tasks
+- ✅ Migration 009: notifications-Tabelle mit Indizes
+- ✅ Migration 010: email, telefon, 6 notify_*-Präferenzen auf users
+- ✅ Migration 011: unmatched_email_attachments + ai_suggestion auf unmatched_emails
+- ✅ notificationService.js: createNotification, notifyUsersByRole, notifyAssignee, notifyHighPriority, checkSlaNotifications (5min), cleanupOldNotifications (30d)
+- ✅ Email-Benachrichtigungen: HTML-Emails an User mit aktivierten Präferenzen
+- ✅ Detaillierte Notification-Nachrichten: buildTicketSummary() mit Kunde, Maschine, Kategorie, Kritikalität, Status, SLA, Betreff
+- ✅ routes/notifications.js: GET list, GET unread-count, PUT read, PUT read-all, DELETE single, DELETE all
+- ✅ NotificationPanel.jsx: Dashboard-Feed mit Icons, Farben, Timestamps, Löschen, Click-Through
+- ✅ App.jsx: Sidebar-Badge für ungelesene Notifications
+- ✅ Ticket-Erstellung: send_confirmation default true, erstellt_von als User-Dropdown (Admin excluded)
+- ✅ BenutzerPage: Email + Telefon Felder, 6 Notification-Präferenz-Checkboxen
+- ✅ Email-Setup: Generische IMAP/SMTP-Config (one.com: imap.one.com / send.one.com), Gmail als Fallback
+- ✅ IMAP-Fix: Buffer.concat statt toString('utf8') für korrekte Binär-Anhänge
+- ✅ Posteingang komplett neu: Master-Detail, voller Email-Inhalt, Side-by-Side Ticket-Erstellung mit QuickCreate
+- ✅ Anhänge im Posteingang: unmatched_email_attachments, Serve-Endpoint, Transfer bei Zuweisung
+- ✅ Attachment-Viewer: fetch+Blob für PDFs/Bilder in neuem Tab
+- ✅ ReplyBox als Modal-Overlay statt inline am Thread-Ende
+- ✅ aiService.js: analyzeEmail (Haiku), suggestReply (Sonnet), summarizeTicket (Haiku), findSimilarTickets (Haiku)
+- ✅ routes/ai.js: 5 Endpoints (status, analyze-email, suggest-reply, summarize, similar)
+- ✅ Auto-Analyse bei ungematchten Emails (ai_suggestion JSONB)
+- ✅ KI-Vorschlag-Karte im Posteingang mit "Vorschläge übernehmen"
+- ✅ "KI-Antwort" + "Zusammenfassung" Buttons in TicketDetail
+- ✅ Cleanup: UnmatchedEmailsPanel entfernt, GMAIL_USER-Ref korrigiert, CLAUDE.md Project Structure aktualisiert
+- ✅ Docs: CHANGELOG, DEVLOG, ACD_v3, README, DB_COVERAGE, DEPLOYMENT alle aktualisiert
+
+### Offene Punkte
+- ⏳ Anthropic API Credits müssen aufgeladen werden ($5 Minimum)
+- ⏳ KI "Ähnliche Tickets" Frontend-Integration (API bereit)
+
+---
+
 ## Session 16 – 2026-03-19
 **Ziel:** Sentry Fehler-Monitoring + Bulk-Aktionen in Ticket-Liste
 **Scope:** server.js, main.jsx, tickets.js, api.js, TicketList.jsx

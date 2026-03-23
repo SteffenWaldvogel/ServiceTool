@@ -144,6 +144,9 @@ export default function TicketDetail() {
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [mergeTarget, setMergeTarget] = useState('');
   const [mergeError, setMergeError] = useState('');
+  const [aiSummary, setAiSummary] = useState(null);
+  const [aiReply, setAiReply] = useState(null);
+  const [aiLoading, setAiLoading] = useState(null); // 'summary' | 'reply' | null
 
   const loadTicket = () => api.getTicket(id).then(t => {
     setTicket(t);
@@ -328,10 +331,51 @@ export default function TicketDetail() {
                 >
                   &#128274; Notiz
                 </button>
+                <button
+                  className="btn btn-sm"
+                  style={{ background: 'rgba(139,92,246,0.15)', color: '#a855f7', border: '1px solid rgba(139,92,246,0.3)' }}
+                  disabled={aiLoading === 'reply'}
+                  onClick={async () => {
+                    setAiLoading('reply');
+                    try {
+                      const result = await api.suggestReply(ticket.ticketnr);
+                      setAiReply(result.reply);
+                      setReplyInternal(false);
+                      setShowReply(true);
+                    } catch {}
+                    finally { setAiLoading(null); }
+                  }}
+                >
+                  {aiLoading === 'reply' ? '🤖…' : '🤖 KI-Antwort'}
+                </button>
+                <button
+                  className="btn btn-sm"
+                  style={{ background: 'rgba(139,92,246,0.15)', color: '#a855f7', border: '1px solid rgba(139,92,246,0.3)' }}
+                  disabled={aiLoading === 'summary'}
+                  onClick={async () => {
+                    setAiLoading('summary');
+                    try {
+                      const result = await api.summarizeTicket(ticket.ticketnr);
+                      setAiSummary(result.summary);
+                    } catch {}
+                    finally { setAiLoading(null); }
+                  }}
+                >
+                  {aiLoading === 'summary' ? '🤖…' : '🤖 Zusammenfassung'}
+                </button>
               </div>
             </div>
             {msgSuccess && (
               <div className="success-banner" style={{ marginBottom: 12 }}>{msgSuccess}</div>
+            )}
+            {aiSummary && (
+              <div style={{ marginBottom: 12, padding: '10px 14px', background: 'rgba(139,92,246,0.06)', border: '1px solid rgba(139,92,246,0.2)', borderRadius: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#a855f7' }}>🤖 KI-Zusammenfassung</span>
+                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 4px' }} onClick={() => setAiSummary(null)}>✕</button>
+                </div>
+                <div style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--text-secondary)' }}>{aiSummary}</div>
+              </div>
             )}
             <MessageThread
               messages={ticket.messages || []}
@@ -354,9 +398,11 @@ export default function TicketDetail() {
                 defaultToEmail={ticket.ap_email || (kunde?.emails?.[0] || '')}
                 defaultToName={ticket.ap_name || ''}
                 initialInternal={replyInternal}
-                onClose={() => setShowReply(false)}
+                initialMessage={aiReply || ''}
+                onClose={() => { setShowReply(false); setAiReply(null); }}
                 onSent={() => {
                   setShowReply(false);
+                  setAiReply(null);
                   setMsgSuccess('Nachricht gespeichert');
                   setTimeout(() => setMsgSuccess(''), 3000);
                   loadTicket();

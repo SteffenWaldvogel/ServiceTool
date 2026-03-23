@@ -40,6 +40,7 @@ const authRouter = require('./routes/auth');
 const usersRouter = require('./routes/users');
 const importRouter = require('./routes/import');
 const notificationsRouter = require('./routes/notifications');
+const aiRouter = require('./routes/ai');
 const { requireAuth, requireAdmin } = require('./middleware/auth');
 const { startEmailPolling } = require('./services/emailService');
 const { checkSlaNotifications, cleanupOldNotifications } = require('./services/notificationService');
@@ -108,6 +109,7 @@ app.use('/api/ansprechpartner', ansprechpartnerRouter);
 app.use('/api/users', requireAdmin, usersRouter);
 app.use('/api/import', importRouter);
 app.use('/api/notifications', notificationsRouter);
+app.use('/api/ai', aiRouter);
 
 // Sentry Error-Handler (muss vor eigenem Error-Handler stehen)
 if (process.env.SENTRY_DSN) {
