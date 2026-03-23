@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/database');
 const { sendConfirmationEmail } = require('../services/emailService');
+const { createNotification, notifyUsersByRole, notifyHighPriority } = require('../services/notificationService');
 const buildQuery = require('../utils/queryBuilder');
 
 const TICKET_FILTERS = {
@@ -172,6 +173,24 @@ router.put('/bulk', async (req, res) => {
       params
     );
     res.json({ updated: result.rowCount, ticketnrs: result.rows.map(r => r.ticketnr) });
+
+    // Notifications for bulk assignment
+    try {
+      if (assigned_to) {
+        for (const row of result.rows) {
+          createNotification({
+            userId: assigned_to,
+            eventType: 'ticket_assigned',
+            title: `Ticket #${row.ticketnr} zugewiesen`,
+            message: null,
+            referenceType: 'ticket',
+            referenceId: row.ticketnr
+          });
+        }
+      }
+    } catch (notifErr) {
+      console.error('[Notification] Fehler bei Bulk-Update:', notifErr.message);
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -458,6 +477,40 @@ router.post('/', async (req, res) => {
     // Return full ticket with joined data
     const full = await pool.query(`${TICKET_SELECT} WHERE t.ticketnr = $1`, [ticket.ticketnr]);
     res.status(201).json(full.rows[0]);
+
+    // Notifications (after response, non-blocking)
+    try {
+      const betreffShort = (betreff || '').split('\n')[0].slice(0, 80);
+      notifyUsersByRole('admin', {
+        eventType: 'ticket_created',
+        title: `Neues Ticket #${ticket.ticketnr}`,
+        message: betreffShort || null,
+        referenceType: 'ticket',
+        referenceId: ticket.ticketnr
+      });
+      if (assigned_to) {
+        createNotification({
+          userId: assigned_to,
+          eventType: 'ticket_assigned',
+          title: `Ticket #${ticket.ticketnr} zugewiesen`,
+          message: betreffShort || null,
+          referenceType: 'ticket',
+          referenceId: ticket.ticketnr
+        });
+      }
+      // High priority notification
+      const kritGewichtung = full.rows[0]?.kritikalitaet_gewichtung;
+      if (kritGewichtung >= 3) {
+        notifyHighPriority(
+          ticket.ticketnr,
+          `Hohe Priorität: Ticket #${ticket.ticketnr}`,
+          `${full.rows[0]?.kritikalitaet_name || 'High'} — ${betreffShort || '(kein Betreff)'}`,
+          assigned_to || null
+        );
+      }
+    } catch (notifErr) {
+      console.error('[Notification] Fehler bei Ticket-Erstellung:', notifErr.message);
+    }
   } catch (err) {
     await client.query('ROLLBACK');
     res.status(500).json({ error: err.message });
@@ -485,6 +538,13 @@ router.put('/:id', async (req, res) => {
     const kritikalitaet_id = req.body.kritikalitaet_id ?? req.body['kritikalität_id'] ?? null;
 
     const kundennummer = ticket_kundennummer || kunden_id || null;
+
+    // Fetch old values for change detection
+    const oldTicket = await pool.query(
+      'SELECT assigned_to, status_id FROM ticket WHERE ticketnr = $1', [req.params.id]
+    );
+    const oldAssigned = oldTicket.rows[0]?.assigned_to;
+    const oldStatus = oldTicket.rows[0]?.status_id;
 
     const result = await pool.query(
       `UPDATE ticket SET
@@ -520,6 +580,43 @@ router.put('/:id', async (req, res) => {
     // Return full ticket with joined data
     const full = await pool.query(`${TICKET_SELECT} WHERE t.ticketnr = $1`, [req.params.id]);
     res.json(full.rows[0]);
+
+    // Notifications (after response, non-blocking)
+    const currentUserId = req.session?.user?.user_id;
+    try {
+      const ticketnr = parseInt(req.params.id);
+      const newAssigned = assigned_to !== undefined ? (assigned_to || null) : null;
+
+      // Ticket assigned to someone new
+      if (newAssigned && newAssigned !== oldAssigned) {
+        createNotification({
+          userId: newAssigned,
+          eventType: 'ticket_assigned',
+          title: `Ticket #${ticketnr} zugewiesen`,
+          message: full.rows[0]?.betreff?.split('\n')[0]?.slice(0, 80) || null,
+          referenceType: 'ticket',
+          referenceId: ticketnr
+        });
+      }
+
+      // Status changed — notify assignee (if not self)
+      if (status_id && parseInt(status_id) !== oldStatus) {
+        const finalAssigned = newAssigned || oldAssigned;
+        if (finalAssigned && finalAssigned !== currentUserId) {
+          const statusName = full.rows[0]?.status_name || 'geändert';
+          createNotification({
+            userId: finalAssigned,
+            eventType: 'status_changed',
+            title: `Ticket #${ticketnr}: Status → ${statusName}`,
+            message: null,
+            referenceType: 'ticket',
+            referenceId: ticketnr
+          });
+        }
+      }
+    } catch (notifErr) {
+      console.error('[Notification] Fehler bei Ticket-Update:', notifErr.message);
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

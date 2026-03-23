@@ -30,7 +30,7 @@ function CreateTicketModal({ onClose, onCreated }) {
     ticket_maschinenid: '',
     ticket_ansprechpartnerid: '',
     erstellt_von: '',
-    send_confirmation: false
+    send_confirmation: true
   });
   const [lookup, setLookup] = useState({
     status: [], kategorien: [], kritikalitaeten: [], kunden: [],
@@ -38,6 +38,7 @@ function CreateTicketModal({ onClose, onCreated }) {
   });
   const [maschinen, setMaschinen] = useState([]);
   const [kundenAP, setKundenAP] = useState([]);
+  const [bearbeiter, setBearbeiter] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -50,10 +51,13 @@ function CreateTicketModal({ onClose, onCreated }) {
       api.getAbteilungen(),
       api.getPositionen(),
       api.getMaschinentypen(),
-      api.getMaschinen()
-    ]).then(([status, kategorien, kritikalitaeten, kunden, abteilungen, positionen, maschinentypen, maschinen]) => {
+      api.getMaschinen(),
+      api.getLookupUsers()
+    ]).then(([status, kategorien, kritikalitaeten, kunden, abteilungen, positionen, maschinentypen, maschinen, users]) => {
       setLookup({ status, kategorien, kritikalitaeten, kunden: kunden.data || kunden, abteilungen, positionen, maschinentypen });
       setMaschinen(maschinen.data || maschinen);
+      // Exclude admin accounts (role_id=1) from Bearbeiter dropdown
+      setBearbeiter((users || []).filter(u => u.role_id !== 1));
       const offen = status.find(s => s.status_name === 'Offen');
       if (offen) setForm(f => ({ ...f, status_id: String(offen.status_id) }));
     }).catch(console.error);
@@ -234,12 +238,12 @@ function CreateTicketModal({ onClose, onCreated }) {
           </div>
           <div className="form-group">
             <label className="form-label">Erstellt von</label>
-            <input
-              className="form-control"
-              value={form.erstellt_von}
-              onChange={set('erstellt_von')}
-              placeholder="Name des Erstellers"
-            />
+            <select className="form-control" value={form.erstellt_von} onChange={set('erstellt_von')}>
+              <option value="">— Bearbeiter wählen —</option>
+              {bearbeiter.map(u => (
+                <option key={u.user_id} value={u.display_name}>{u.display_name}</option>
+              ))}
+            </select>
           </div>
           <div className="form-group">
             <label className="form-label">Beschreibung</label>

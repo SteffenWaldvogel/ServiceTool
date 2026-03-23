@@ -10,6 +10,14 @@ function UserModal({ user, onClose, onSaved }) {
     password: '',
     role_id: user?.role_id || 2,
     is_active: user?.is_active ?? true,
+    email: user?.email || '',
+    telefon: user?.telefon || '',
+    notify_ticket_assigned: user?.notify_ticket_assigned ?? true,
+    notify_ticket_created: user?.notify_ticket_created ?? false,
+    notify_status_changed: user?.notify_status_changed ?? true,
+    notify_sla_warning: user?.notify_sla_warning ?? true,
+    notify_unmatched_email: user?.notify_unmatched_email ?? false,
+    notify_high_priority: user?.notify_high_priority ?? true,
   });
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -28,11 +36,23 @@ function UserModal({ user, onClose, onSaved }) {
     setLoading(true); setError('');
     try {
       if (isEdit) {
-        const data = { display_name: form.display_name, role_id: Number(form.role_id), is_active: form.is_active };
+        const data = {
+          display_name: form.display_name, role_id: Number(form.role_id), is_active: form.is_active,
+          email: form.email || null, telefon: form.telefon || null,
+          notify_ticket_assigned: form.notify_ticket_assigned,
+          notify_ticket_created: form.notify_ticket_created,
+          notify_status_changed: form.notify_status_changed,
+          notify_sla_warning: form.notify_sla_warning,
+          notify_unmatched_email: form.notify_unmatched_email,
+          notify_high_priority: form.notify_high_priority,
+        };
         if (form.password) data.password = form.password;
         await api.updateUser(user.user_id, data);
       } else {
-        await api.createUser({ username: form.username, password: form.password, display_name: form.display_name, role_id: Number(form.role_id) });
+        await api.createUser({
+          username: form.username, password: form.password, display_name: form.display_name,
+          role_id: Number(form.role_id), email: form.email || null, telefon: form.telefon || null
+        });
       }
       onSaved();
     } catch (err) { setError(err.message); }
@@ -62,6 +82,16 @@ function UserModal({ user, onClose, onSaved }) {
             <label className="form-label">Passwort {isEdit ? '(leer = nicht ändern, min. 8 Zeichen)' : '* (min. 8 Zeichen)'}</label>
             <input className="form-control" type="password" value={form.password} onChange={set('password')} autoComplete="new-password" />
           </div>
+          <div className="grid-2">
+            <div className="form-group">
+              <label className="form-label">E-Mail</label>
+              <input className="form-control" type="email" value={form.email} onChange={set('email')} placeholder="user@example.com" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Telefon</label>
+              <input className="form-control" value={form.telefon} onChange={set('telefon')} placeholder="+49 ..." />
+            </div>
+          </div>
           <div className="form-group">
             <label className="form-label">Rolle</label>
             <select className="form-control" value={form.role_id} onChange={set('role_id')}>
@@ -71,10 +101,32 @@ function UserModal({ user, onClose, onSaved }) {
             </select>
           </div>
           {isEdit && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <input type="checkbox" id="is_active" checked={form.is_active} onChange={set('is_active')} />
-              <label htmlFor="is_active" className="form-label" style={{ margin: 0 }}>Aktiv</label>
-            </div>
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <input type="checkbox" id="is_active" checked={form.is_active} onChange={set('is_active')} />
+                <label htmlFor="is_active" className="form-label" style={{ margin: 0 }}>Aktiv</label>
+              </div>
+              {form.email && (
+                <div style={{ marginBottom: 12 }}>
+                  <label className="form-label" style={{ marginBottom: 8, display: 'block' }}>E-Mail-Benachrichtigungen</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px', fontSize: 13 }}>
+                    {[
+                      { key: 'notify_ticket_assigned', label: 'Ticket zugewiesen' },
+                      { key: 'notify_status_changed', label: 'Status geändert' },
+                      { key: 'notify_high_priority', label: 'Hohe Priorität' },
+                      { key: 'notify_sla_warning', label: 'SLA-Warnung' },
+                      { key: 'notify_ticket_created', label: 'Neues Ticket' },
+                      { key: 'notify_unmatched_email', label: 'Ungematchte Email' },
+                    ].map(({ key, label }) => (
+                      <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <input type="checkbox" id={key} checked={form[key]} onChange={set(key)} />
+                        <label htmlFor={key} style={{ cursor: 'pointer', color: 'var(--text-secondary)' }}>{label}</label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose}>Abbrechen</button>
@@ -184,6 +236,7 @@ export default function BenutzerPage() {
               <tr>
                 <th>Benutzername</th>
                 <th>Anzeigename</th>
+                <th>E-Mail</th>
                 <th>Rolle</th>
                 <th>Aktiv</th>
                 <th>Letzter Login</th>
@@ -195,6 +248,7 @@ export default function BenutzerPage() {
                 <tr key={u.user_id}>
                   <td className="mono" style={{ fontSize: 13 }}>{u.username}</td>
                   <td>{u.display_name || <span className="text-muted">–</span>}</td>
+                  <td style={{ fontSize: 12 }}>{u.email || <span className="text-muted">–</span>}</td>
                   <td>
                     <span className="badge" style={{
                       background: u.role === 'admin' ? 'rgba(239,68,68,0.15)' : u.role === 'readonly' ? 'rgba(100,116,139,0.15)' : 'rgba(59,130,246,0.15)',

@@ -4,6 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { api } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { getKritColor } from '../utils/helpers';
+import NotificationPanel from '../components/NotificationPanel';
 
 function StatTile({ label, value, color }) {
   return (
@@ -77,6 +78,8 @@ export default function Dashboard() {
           ))}
         </div>
       </div>
+
+      <NotificationPanel />
 
       <div className="stat-grid">
         <StatTile label="Offene Tickets" value={stats.offen} color="#3b82f6" />

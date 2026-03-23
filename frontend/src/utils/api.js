@@ -229,6 +229,15 @@ export const api = {
   updateRolePermissions: (id, permissionIds) =>
     request(`/stammdaten/roles/${id}/permissions`, { method: 'PUT', body: JSON.stringify({ permission_ids: permissionIds }) }),
 
+  // ── Notifications ──────────────────────────────────────────────────────────
+  getNotifications: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return request(`/notifications${q ? '?' + q : ''}`);
+  },
+  getUnreadNotificationCount: () => request('/notifications/unread-count'),
+  markNotificationRead: (id) => request(`/notifications/${id}/read`, { method: 'PUT' }),
+  markAllNotificationsRead: () => request('/notifications/read-all', { method: 'PUT' }),
+
   // ── Dubletten-Matching ────────────────────────────────────────────────────
   matchKunden: (data) => request('/kunden/match', { method: 'POST', body: JSON.stringify(data) }),
   matchAnsprechpartner: (data) => request('/ansprechpartner/match', { method: 'POST', body: JSON.stringify(data) }),

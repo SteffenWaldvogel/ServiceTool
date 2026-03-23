@@ -39,8 +39,10 @@ const ansprechpartnerRouter = require('./routes/ansprechpartner');
 const authRouter = require('./routes/auth');
 const usersRouter = require('./routes/users');
 const importRouter = require('./routes/import');
+const notificationsRouter = require('./routes/notifications');
 const { requireAuth, requireAdmin } = require('./middleware/auth');
 const { startEmailPolling } = require('./services/emailService');
+const { checkSlaNotifications, cleanupOldNotifications } = require('./services/notificationService');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -105,6 +107,7 @@ app.use('/api/custom-fields', requireAdmin, customFieldsAdminRouter);
 app.use('/api/ansprechpartner', ansprechpartnerRouter);
 app.use('/api/users', requireAdmin, usersRouter);
 app.use('/api/import', importRouter);
+app.use('/api/notifications', notificationsRouter);
 
 // Sentry Error-Handler (muss vor eigenem Error-Handler stehen)
 if (process.env.SENTRY_DSN) {
@@ -124,4 +127,10 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`Service Tool Backend läuft auf Port ${PORT}`);
   startEmailPolling();
+
+  // SLA-Notifications alle 5 Minuten prüfen + Cleanup alter Benachrichtigungen
+  setInterval(() => {
+    checkSlaNotifications();
+    cleanupOldNotifications();
+  }, 5 * 60 * 1000);
 });

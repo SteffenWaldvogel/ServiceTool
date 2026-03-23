@@ -226,7 +226,7 @@ router.get('/dashboard-stats', async (req, res) => {
 router.get('/users', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT user_id, username, COALESCE(display_name, username) AS display_name
+      `SELECT user_id, username, COALESCE(display_name, username) AS display_name, role_id
        FROM users
        WHERE is_active = true
        ORDER BY display_name, username`

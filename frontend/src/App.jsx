@@ -45,6 +45,7 @@ function AppContent() {
   const { user, loading, logout, hasPermission } = auth || {};
   const [unreadCount, setUnreadCount] = useState(0);
   const [unmatchedCount, setUnmatchedCount] = useState(0);
+  const [notifCount, setNotifCount] = useState(0);
   const [showChangePw, setShowChangePw] = useState(false);
 
   useEffect(() => {
@@ -55,10 +56,14 @@ function AppContent() {
         timer = setTimeout(load, interval);
         return;
       }
-      api.getStats()
-        .then(s => {
+      Promise.all([
+        api.getStats(),
+        api.getUnreadNotificationCount().catch(() => ({ count: 0 }))
+      ])
+        .then(([s, n]) => {
           setUnreadCount(s.unread_messages || 0);
           setUnmatchedCount(s.unmatched_emails || 0);
+          setNotifCount(n.count || 0);
           interval = 60000;
         })
         .catch(() => {
@@ -89,6 +94,7 @@ function AppContent() {
             <NavLink to="/dashboard" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
               <NavIcon path={icons.dashboard} />
               Dashboard
+              {notifCount > 0 && <span className="nav-badge">{notifCount}</span>}
             </NavLink>
 
             <div className="nav-section">Service</div>

@@ -192,6 +192,20 @@ async function processIncomingEmail(parsed, rawText) {
     );
     console.log(`📨 Email von ${fromAddress}: kein Match → unmatched_emails`);
 
+    // Notify admins about unmatched email
+    try {
+      const { notifyUsersByRole } = require('./notificationService');
+      notifyUsersByRole('admin', {
+        eventType: 'unmatched_email',
+        title: `Ungematchte Email von ${fromName || fromAddress}`,
+        message: (subject || '(kein Betreff)').slice(0, 80),
+        referenceType: 'unmatched_email',
+        referenceId: null
+      });
+    } catch (notifErr) {
+      console.error('[Notification] Fehler bei unmatched email:', notifErr.message);
+    }
+
   } catch (err) {
     console.error('[Email] processIncomingEmail Fehler:', err.message);
   }
