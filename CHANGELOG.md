@@ -8,6 +8,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [UNRELEASED]
 
+### Added (Session 17)
+- Email-Anhänge: Anhänge aus IMAP-Emails werden gespeichert und in der Nachrichtenansicht angezeigt
+- Import-Seite: CSV/Excel-Import für Kunden, Maschinen und andere Entitäten (Upload, Preview, Feld-Mapping, Execute)
+- Ticket-Verknüpfungen: Tickets können verknüpft werden (verwandt, blockiert, Duplikat) + Merge/Unmerge
+- Posteingang (PosteingangPage): Ungematchte Emails als eigenständige Seite mit manueller Ticket-Zuweisung
+- UI-Verbesserungen aus Session 17 commit
+
 ### Added (Session 16)
 - Sentry: optionales Fehler-Monitoring für Frontend (@sentry/react) und Backend (@sentry/node)
 - Sentry wird nur initialisiert wenn SENTRY_DSN / VITE_SENTRY_DSN gesetzt – kein Pflichtfeld

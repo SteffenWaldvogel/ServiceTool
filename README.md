@@ -9,11 +9,26 @@ Ein internes Service-Ticketing-System für technischen Kundendienst und Maschine
 ### Tickets
 - Tickets erstellen, bearbeiten und löschen
 - Felder: Kunde, Ansprechpartner, Maschine, Kategorie, Kritikalität, Status, Betreff, Beschreibung
-- Ticket-Nachrichten (interner Verlauf + E-Mail-Eingang)
-- Bestätigungs-E-Mail an Kunden beim Erstellen
+- Ticket-Zuweisung an Techniker (Filter "Meine Tickets")
+- Ticket-Verknüpfungen (Links zwischen Tickets + Merging)
+- SLA-Tracking mit Warning/Überfällig-Badges (konfigurierbar pro Service-Priority)
+- Bulk-Aktionen (Mehrfachauswahl, Status/Zuweisung setzen)
+- CSV-Export mit aktiven Filtern
+- Volltextsuche (Nachrichten, Maschinennummer, AP-Name) mit Highlight
 - Filter nach Status, Kritikalität, Kategorie, Datum, Abgeschlossen/Offen
 - Sortierung nach Ticket-Nr., Kunde, Kritikalität, Status, Erstellt
 - Pagination (25 / 50 / 100 Einträge pro Seite)
+
+### E-Mail-Kommunikation
+- Thread-Ansicht pro Ticket (Nachrichten + E-Mails)
+- Antworten direkt aus dem Ticket heraus (Reply)
+- Interne Notizen (nicht für Kunden sichtbar)
+- Bestätigungs-E-Mail an Kunden beim Erstellen
+- IMAP-Polling für eingehende E-Mails
+
+### Posteingang
+- Übersicht aller ungematchten E-Mails
+- Manuelle Zuweisung an bestehende Tickets oder Kunden
 
 ### Kunden
 - Vollständige Kundenverwaltung (Name, Matchcode, Adresse, Priorität)
@@ -35,10 +50,19 @@ Ein internes Service-Ticketing-System für technischen Kundendienst und Maschine
 - Ersatzteilkatalog mit Kompatibilitätszuordnung (Baujahr + Maschinennummer)
 - Custom Fields pro Ersatzteil
 
+### Import
+- CSV/Excel-Import für Kunden, Maschinen und weitere Entitäten
+
 ### Stammdaten (Admin)
 - Verwaltung aller Referenzdaten über eine eigene Adminseite
 - Tabs: Service-Prioritäten, Abteilungen, Positionen, Kategorien, Kritikalität, Status, Maschinentypen, Freifelder
 - Freifelder (Custom Fields) pro Entität definierbar inkl. Dropdown-Optionen
+
+### Authentication & Benutzerverwaltung
+- Login mit Session-basierter Authentifizierung
+- Passwort ändern
+- RBAC mit 3 Rollen: Admin, Techniker, Readonly (25 Permissions)
+- Benutzerverwaltung für Admins
 
 ### System / Audit-Log
 - Lückenlose Änderungshistorie für alle relevanten Tabellen
@@ -54,6 +78,9 @@ Ein internes Service-Ticketing-System für technischen Kundendienst und Maschine
 - Inline-Anlage neuer Entitäten direkt aus Dropdown-Feldern heraus
 - Verwendet in: Ticket erstellen (Kunde, AP, Maschine), Maschine anlegen (Maschinentyp)
 
+### Monitoring
+- Sentry Fehler-Monitoring (optional, via `SENTRY_DSN` / `VITE_SENTRY_DSN`)
+
 ---
 
 ## Technik-Stack
@@ -65,14 +92,16 @@ Ein internes Service-Ticketing-System für technischen Kundendienst und Maschine
 | Frontend   | React 18, Vite (Port 5173)           |
 | Routing    | React Router v6                      |
 | Charts     | Recharts                             |
+| Auth       | express-session, bcryptjs, RBAC      |
 | E-Mail     | Gmail IMAP (imap) + SMTP (nodemailer)|
+| Monitoring | Sentry (optional)                    |
 | Fonts      | IBM Plex Sans / IBM Plex Mono        |
 
 ---
 
 ## Voraussetzungen
 
-- Node.js 18+
+- Node.js 20+
 - PostgreSQL 17
 - Ein Gmail-Konto mit App-Passwort (nur für E-Mail-Funktion erforderlich)
 
@@ -117,8 +146,15 @@ DB_NAME=servicetickets
 DB_USER=postgres
 DB_PASSWORD=dein_passwort
 
+SESSION_SECRET=ein_sicherer_zufalls_string   # Pflichtfeld, Server startet nicht ohne
+NODE_ENV=production                           # oder development
+CORS_ORIGIN=http://localhost:5173
+
 GMAIL_USER=deine@gmail.com
 GMAIL_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx
+
+SENTRY_DSN=                                   # optional
+VITE_SENTRY_DSN=                              # optional, Frontend-Sentry
 ```
 
 Abhängigkeiten installieren und starten:
@@ -140,16 +176,18 @@ npm run dev
 
 Frontend läuft auf: `http://localhost:5173`
 
+Weitere Details zu Deployment und Produktivbetrieb: siehe `docs/DEPLOYMENT.md`.
+
 ---
 
 ## E-Mail-Integration (Gmail)
 
 1. Google-Konto: Zwei-Faktor-Authentifizierung aktivieren
-2. App-Passwort generieren: Google-Konto → Sicherheit → App-Passwörter
+2. App-Passwort generieren: Google-Konto -> Sicherheit -> App-Passwörter
 3. IMAP in den Gmail-Einstellungen aktivieren
 4. `GMAIL_USER` und `GMAIL_APP_PASSWORD` in `backend/.env` eintragen
 
-Eingehende E-Mails werden automatisch als Ticket-Nachrichten verarbeitet.
+Eingehende E-Mails werden automatisch als Ticket-Nachrichten verarbeitet. Nicht zuordenbare E-Mails landen im Posteingang zur manuellen Zuweisung.
 
 ---
 
@@ -196,6 +234,9 @@ ServiceTool/
 │       ├── config/
 │       │   ├── database.js
 │       │   └── seed.sql
+│       ├── middleware/
+│       │   ├── auth.js              # Session-Auth + RBAC
+│       │   └── validate.js          # express-validator Middleware
 │       ├── routes/
 │       │   ├── tickets.js
 │       │   ├── kunden.js
@@ -206,7 +247,10 @@ ServiceTool/
 │       │   ├── stammdaten.js
 │       │   ├── customFieldsAdmin.js
 │       │   ├── system.js
-│       │   └── lookup.js
+│       │   ├── lookup.js
+│       │   ├── auth.js              # Login, Logout, Passwort ändern
+│       │   ├── users.js             # Benutzerverwaltung (Admin)
+│       │   └── import.js            # CSV/Excel-Import
 │       ├── services/
 │       │   ├── emailService.js
 │       │   └── matchingService.js
@@ -228,25 +272,39 @@ ServiceTool/
 │       │   ├── ErsatzteileList.jsx
 │       │   ├── ErsatzteileDetail.jsx
 │       │   ├── StammdatenPage.jsx
-│       │   └── SystemPage.jsx
+│       │   ├── SystemPage.jsx
+│       │   ├── LoginPage.jsx
+│       │   ├── BenutzerPage.jsx
+│       │   ├── ImportPage.jsx
+│       │   └── PosteingangPage.jsx
 │       ├── components/
 │       │   ├── QuickCreate.jsx
 │       │   ├── DuplicateWarning.jsx
 │       │   ├── FilterBar.jsx
 │       │   ├── SortableHeader.jsx
-│       │   └── CustomFieldsSection.jsx
+│       │   ├── CustomFieldsSection.jsx
+│       │   ├── MessageThread.jsx
+│       │   ├── ReplyBox.jsx
+│       │   └── UnmatchedEmailsPanel.jsx
 │       ├── hooks/
 │       │   └── useFilter.js
 │       └── utils/
 │           ├── api.js
 │           └── helpers.js
+├── nginx/
+│   └── nginx.conf
 ├── scripts/
 │   ├── git-sync.sh
 │   └── git-sync.ps1
 ├── docs/
-│   └── DB_COVERAGE.md
+│   ├── ACD_v3.md
+│   ├── DB_COVERAGE.md
+│   └── DEPLOYMENT.md
 ├── database_schema.sql
+├── ecosystem.config.js
 ├── CHANGELOG.md
+├── DEVLOG.md
+├── CLEANUP_NOTES.md
 └── CLAUDE.md
 ```
 
@@ -254,4 +312,4 @@ ServiceTool/
 
 ## Lizenz
 
-Internes Projekt – nicht zur öffentlichen Nutzung bestimmt.
+Internes Projekt -- nicht zur öffentlichen Nutzung bestimmt.

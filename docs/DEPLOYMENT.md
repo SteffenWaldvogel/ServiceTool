@@ -52,11 +52,18 @@ CREATE DATABASE servicetickets;
 psql -U postgres -d servicetickets -f C:\ServiceTool\database_schema.sql
 ```
 
-Migrations ausführen (falls vorhanden):
+Migrations in Reihenfolge ausführen:
 
 ```powershell
+psql -U postgres -d servicetickets -f C:\ServiceTool\backend\migrations\003_unmatched_emails.sql
+psql -U postgres -d servicetickets -f C:\ServiceTool\backend\migrations\004_performance_indexes.sql
+psql -U postgres -d servicetickets -f C:\ServiceTool\backend\migrations\005_users.sql
+psql -U postgres -d servicetickets -f C:\ServiceTool\backend\migrations\006_rbac.sql
 psql -U postgres -d servicetickets -f C:\ServiceTool\backend\migrations\007_assigned_to.sql
+psql -U postgres -d servicetickets -f C:\ServiceTool\backend\migrations\008_sla.sql
 ```
+
+> **Wichtig:** Die Migrations müssen in aufsteigender Reihenfolge ausgeführt werden, da spätere Migrations auf vorherige aufbauen können.
 
 ---
 
@@ -90,6 +97,13 @@ Für Email-Integration zusätzlich:
 ```env
 GMAIL_USER=<gmail-adresse>
 GMAIL_APP_PASSWORD=<app-passwort>
+```
+
+Optional: Sentry Error Monitoring:
+
+```env
+# Optional: Sentry Error Monitoring
+SENTRY_DSN=https://...@sentry.io/...
 ```
 
 ---
