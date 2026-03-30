@@ -20,17 +20,51 @@ const transporter = nodemailer.createTransport({
   }
 });
 
+// ─── checkEmailAlreadyProcessed ──────────────────────────────────────────────
+async function checkEmailAlreadyProcessed(emailMessageId, fromEmail, subject, messageDate) {
+  // Primary: check by RFC Message-ID
+  if (emailMessageId) {
+    const r1 = await pool.query(
+      'SELECT 1 FROM ticket_messages WHERE email_message_id = $1 LIMIT 1', [emailMessageId]
+    );
+    if (r1.rows.length > 0) return true;
+    const r2 = await pool.query(
+      'SELECT 1 FROM unmatched_emails WHERE email_message_id = $1 LIMIT 1', [emailMessageId]
+    );
+    if (r2.rows.length > 0) return true;
+  }
+  // Fallback: check by from + subject + date (within 1 minute window)
+  if (fromEmail && messageDate) {
+    const r3 = await pool.query(
+      `SELECT 1 FROM ticket_messages
+       WHERE from_email = $1 AND created_at BETWEEN $2::timestamptz - INTERVAL '1 minute' AND $2::timestamptz + INTERVAL '1 minute'
+       LIMIT 1`,
+      [fromEmail, messageDate]
+    );
+    if (r3.rows.length > 0) return true;
+    const r4 = await pool.query(
+      `SELECT 1 FROM unmatched_emails
+       WHERE from_email = $1 AND COALESCE(subject,'') = COALESCE($2,'')
+         AND received_at BETWEEN $3::timestamptz - INTERVAL '1 minute' AND $3::timestamptz + INTERVAL '1 minute'
+       LIMIT 1`,
+      [fromEmail, subject || '', messageDate]
+    );
+    if (r4.rows.length > 0) return true;
+  }
+  return false;
+}
+
 // ─── addMessageToTicket ───────────────────────────────────────────────────────
-async function addMessageToTicket(ticketnr, fromEmail, fromName, messageText, messageType = 'email', attachments = []) {
+async function addMessageToTicket(ticketnr, fromEmail, fromName, messageText, messageType = 'email', attachments = [], emailMessageId = null) {
   const ticketCheck = await pool.query('SELECT ticketnr FROM ticket WHERE ticketnr = $1', [ticketnr]);
   if (ticketCheck.rows.length === 0) {
     console.log(`⚠️  Ticket #${ticketnr} nicht gefunden – Nachricht ignoriert`);
     return null;
   }
   const result = await pool.query(
-    `INSERT INTO ticket_messages (ticketnr, from_email, from_name, message, message_type, is_internal, created_at)
-     VALUES ($1, $2, $3, $4, $5, false, NOW()) RETURNING *`,
-    [ticketnr, fromEmail, fromName || fromEmail, messageText, messageType]
+    `INSERT INTO ticket_messages (ticketnr, from_email, from_name, message, message_type, is_internal, created_at, email_message_id)
+     VALUES ($1, $2, $3, $4, $5, false, NOW(), $6) RETURNING *`,
+    [ticketnr, fromEmail, fromName || fromEmail, messageText, messageType, emailMessageId]
   );
   const messageId = result.rows[0].message_id;
 
@@ -102,6 +136,14 @@ async function processIncomingEmail(parsed, rawText) {
     const fromName = parsed.from?.value?.[0]?.name || fromAddress;
     if (!fromAddress) return;
 
+    const emailMessageId = parsed.messageId || null;
+    const messageDate = parsed.date || null;
+
+    // Dedup: skip if this email was already processed
+    if (await checkEmailAlreadyProcessed(emailMessageId, fromAddress, parsed.subject, messageDate)) {
+      return;
+    }
+
     const subject = parsed.subject || '';
     const messageText = parsed.text || (parsed.html ? parsed.html.replace(/<[^>]+>/g, '') : '') || '';
 
@@ -131,7 +173,7 @@ async function processIncomingEmail(parsed, rawText) {
         if (termCheck.rows[0].is_terminal) {
           console.log(`⚠️  Ticket #${ticketnr} ist abgeschlossen – speichere trotzdem`);
         }
-        await addMessageToTicket(ticketnr, fromAddress, fromName, messageText.slice(0, 5000), 'email', attachments);
+        await addMessageToTicket(ticketnr, fromAddress, fromName, messageText.slice(0, 5000), 'email', attachments, emailMessageId);
         console.log(`📨 Email von ${fromAddress}: Match-Stufe 1 → Ticket #${ticketnr}`);
         return;
       }
@@ -162,7 +204,7 @@ async function processIncomingEmail(parsed, rawText) {
 
       if (openTicket.rows.length > 0) {
         const ticketnr = openTicket.rows[0].ticketnr;
-        await addMessageToTicket(ticketnr, fromAddress, fromName, messageText.slice(0, 5000), 'email', attachments);
+        await addMessageToTicket(ticketnr, fromAddress, fromName, messageText.slice(0, 5000), 'email', attachments, emailMessageId);
         console.log(`📨 Email von ${fromAddress}: Match-Stufe 2 → Ticket #${ticketnr}`);
         return;
       } else {
@@ -182,7 +224,7 @@ async function processIncomingEmail(parsed, rawText) {
             [kat_id, krit_id, status_id, kundennummer, fromAddress]
           );
           const newTicketnr = ticketResult.rows[0].ticketnr;
-          await addMessageToTicket(newTicketnr, fromAddress, fromName, messageText.slice(0, 5000), 'email', attachments);
+          await addMessageToTicket(newTicketnr, fromAddress, fromName, messageText.slice(0, 5000), 'email', attachments, emailMessageId);
           console.log(`📨 Email von ${fromAddress}: Match-Stufe 2b → neues Ticket #${newTicketnr}`);
           return;
         }
@@ -191,8 +233,8 @@ async function processIncomingEmail(parsed, rawText) {
 
     // STUFE 3: Kein Match → in unmatched_emails speichern
     const unmatchedResult = await pool.query(
-      'INSERT INTO unmatched_emails (from_email, from_name, subject, message) VALUES ($1, $2, $3, $4) RETURNING id',
-      [fromAddress, fromName, subject, messageText.slice(0, 5000)]
+      'INSERT INTO unmatched_emails (from_email, from_name, subject, message, email_message_id) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+      [fromAddress, fromName, subject, messageText.slice(0, 5000), emailMessageId]
     );
     const unmatchedId = unmatchedResult.rows[0].id;
 
@@ -248,11 +290,11 @@ async function processIncomingEmail(parsed, rawText) {
 }
 
 // ─── IMAP Email Polling ───────────────────────────────────────────────────────
-function fetchUnseen(imap) {
-  imap.search(['UNSEEN'], (err, results) => {
+function fetchBySearch(imap, criteria, markSeen) {
+  imap.search(criteria, (err, results) => {
     if (err || !results?.length) return;
 
-    const fetch = imap.fetch(results, { bodies: '', markSeen: true });
+    const fetch = imap.fetch(results, { bodies: '', markSeen });
     fetch.on('message', (msg) => {
       const chunks = [];
       msg.on('body', (stream) => {
@@ -266,6 +308,18 @@ function fetchUnseen(imap) {
     });
     fetch.once('error', (e) => console.error('[IMAP] Fetch error:', e.message));
   });
+}
+
+function fetchUnseen(imap) {
+  fetchBySearch(imap, ['UNSEEN'], true);
+}
+
+// Catch-up: fetch last 48h regardless of seen/unseen — dedup prevents duplicates
+function fetchCatchUp(imap) {
+  const since = new Date();
+  since.setHours(since.getHours() - 48);
+  console.log(`[Email] Catch-up: suche Emails seit ${since.toISOString()}...`);
+  fetchBySearch(imap, [['SINCE', since]], false);
 }
 
 let pollingInterval = null;
@@ -296,8 +350,8 @@ function startEmailPolling() {
     imap.once('ready', () => {
       imap.openBox('INBOX', false, (err) => {
         if (err) { console.error('[IMAP] openBox Fehler:', err.message); return; }
-        console.log('[Email] IMAP verbunden – polling alle 30s');
-        fetchUnseen(imap);
+        console.log('[Email] IMAP verbunden – catch-up + polling alle 30s');
+        fetchCatchUp(imap);
         pollingInterval = setInterval(() => fetchUnseen(imap), 30000);
         imap.once('end', () => {
           clearInterval(pollingInterval);

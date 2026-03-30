@@ -146,7 +146,9 @@ export default function TicketDetail() {
   const [mergeError, setMergeError] = useState('');
   const [aiSummary, setAiSummary] = useState(null);
   const [aiReply, setAiReply] = useState(null);
-  const [aiLoading, setAiLoading] = useState(null); // 'summary' | 'reply' | null
+  const [aiLoading, setAiLoading] = useState(null); // 'summary' | 'reply' | 'similar' | null
+  const [similarTickets, setSimilarTickets] = useState(null); // null = not loaded, [] = none found
+  const [similarDetails, setSimilarDetails] = useState([]);
 
   const loadTicket = () => api.getTicket(id).then(t => {
     setTicket(t);
@@ -693,6 +695,69 @@ export default function TicketDetail() {
                   <button className="btn btn-primary btn-sm" onClick={addLink}>Verknüpfen</button>
                   <button className="btn btn-ghost btn-sm" onClick={() => { setShowLinkModal(false); setLinkError(''); setLinkTarget(''); }}>&#x2715;</button>
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* Ähnliche Tickets (KI) */}
+          <div className="card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div className="card-title" style={{ marginBottom: 0 }}>Ähnliche Tickets</div>
+              <button
+                className="btn btn-sm"
+                style={{ background: 'rgba(139,92,246,0.15)', color: '#a855f7', border: '1px solid rgba(139,92,246,0.3)', fontSize: 11 }}
+                disabled={aiLoading === 'similar'}
+                onClick={async () => {
+                  setAiLoading('similar');
+                  setSimilarTickets(null);
+                  setSimilarDetails([]);
+                  try {
+                    const firstMsg = (ticket.messages || [])[0]?.message || '';
+                    const result = await api.findSimilarTickets({ subject: `Ticket #${ticket.ticketnr}`, message: firstMsg });
+                    const ticketNrs = (result.similar || []).filter(nr => nr !== ticket.ticketnr);
+                    setSimilarTickets(ticketNrs);
+                    const details = await Promise.all(
+                      ticketNrs.map(nr => api.getTicket(nr).catch(() => null))
+                    );
+                    setSimilarDetails(details.filter(Boolean));
+                  } catch {
+                    setSimilarTickets([]);
+                  } finally {
+                    setAiLoading(null);
+                  }
+                }}
+              >
+                {aiLoading === 'similar' ? 'Suche...' : 'KI-Suche'}
+              </button>
+            </div>
+            {similarTickets === null && aiLoading !== 'similar' && (
+              <div className="text-muted" style={{ fontSize: 12 }}>KI-Suche starten um ähnliche Tickets zu finden</div>
+            )}
+            {similarTickets !== null && similarDetails.length === 0 && (
+              <div className="text-muted" style={{ fontSize: 12 }}>Keine ähnlichen Tickets gefunden</div>
+            )}
+            {similarDetails.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {similarDetails.map(t => (
+                  <div key={t.ticketnr} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+                    <div>
+                      <Link to={`/tickets/${t.ticketnr}`} style={{ color: 'var(--accent)', fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
+                        #{t.ticketnr}
+                      </Link>
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginLeft: 8 }}>
+                        {t.kunden_name || ''}
+                      </span>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        <span className="badge" style={{
+                          background: t.is_terminal ? 'rgba(100,116,139,0.15)' : 'rgba(59,130,246,0.15)',
+                          color: t.is_terminal ? '#64748b' : 'var(--accent)',
+                          fontSize: 10
+                        }}>{t.status_name}</span>
+                        {t.kategorie_name && <span style={{ marginLeft: 6 }}>{t.kategorie_name}</span>}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
