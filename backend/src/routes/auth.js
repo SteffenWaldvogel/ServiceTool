@@ -88,6 +88,23 @@ router.get('/me', (req, res) => {
   res.json({ user: req.session.user });
 });
 
+// GET /api/auth/my-permissions
+router.get('/my-permissions', async (req, res) => {
+  if (!req.session?.user) return res.status(401).json({ error: 'Nicht eingeloggt' });
+  const u = req.session.user;
+  try {
+    if (u.role === 'admin') {
+      const result = await pool.query('SELECT name FROM permissions');
+      return res.json(result.rows.map(r => r.name));
+    }
+    // Permissions aus session zurückgeben (wurden beim Login geladen)
+    const sessionPerms = Array.isArray(u.permissions) ? u.permissions : [];
+    return res.json(sessionPerms);
+  } catch (err) {
+    res.status(500).json({ error: 'Interner Serverfehler' });
+  }
+});
+
 // POST /api/auth/change-password
 router.post('/change-password', async (req, res) => {
   if (!req.session?.user) return res.status(401).json({ error: 'Nicht eingeloggt' });

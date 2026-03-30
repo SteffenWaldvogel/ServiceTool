@@ -41,7 +41,9 @@ const usersRouter = require('./routes/users');
 const importRouter = require('./routes/import');
 const notificationsRouter = require('./routes/notifications');
 const aiRouter = require('./routes/ai');
+const rolesRouter = require('./routes/roles');
 const { requireAuth, requireAdmin } = require('./middleware/auth');
+const { maintenanceModeMiddleware } = require('./middleware/maintenanceMode');
 const { startEmailPolling } = require('./services/emailService');
 const { checkSlaNotifications, cleanupOldNotifications } = require('./services/notificationService');
 
@@ -92,8 +94,24 @@ app.use('/api/auth', authRouter);
 // Health check (public)
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
+// Öffentlicher Wartungsmodus-Status (kein Auth nötig, z.B. für Login-Seite)
+app.get('/api/system/maintenance', async (req, res) => {
+  const pool = require('./config/database');
+  try {
+    const result = await pool.query(
+      'SELECT is_active, activated_by, activated_at, reason, estimated_end FROM maintenance_mode WHERE id = 1'
+    );
+    res.json(result.rows[0] || { is_active: false });
+  } catch (err) {
+    res.json({ is_active: false });
+  }
+});
+
 // Protect all remaining /api routes
 app.use('/api', requireAuth);
+
+// Wartungsmodus-Middleware (nach Auth, damit Admins immer durchkommen)
+app.use('/api', maintenanceModeMiddleware);
 
 // Routes
 app.use('/api/tickets', ticketsRouter);
@@ -110,6 +128,7 @@ app.use('/api/users', requireAdmin, usersRouter);
 app.use('/api/import', importRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/ai', aiRouter);
+app.use('/api/roles', rolesRouter);
 
 // Sentry Error-Handler (muss vor eigenem Error-Handler stehen)
 if (process.env.SENTRY_DSN) {

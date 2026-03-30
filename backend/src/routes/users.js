@@ -99,6 +99,54 @@ router.put('/:id', userUpdateRules, validate, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// GET /api/users/:id/roles – Rollen eines Benutzers
+router.get('/:id/roles', async (req, res) => {
+  const { id } = req.params;
+  if (isNaN(id)) return res.status(400).json({ error: 'Ungültige Benutzer-ID' });
+  try {
+    const result = await pool.query(
+      `SELECT r.role_id, r.name, r.label
+       FROM roles r
+       JOIN user_roles ur ON ur.role_id = r.role_id
+       WHERE ur.user_id = $1
+       ORDER BY r.role_id`,
+      [id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/users/:id/roles – Rollen eines Benutzers ersetzen
+router.put('/:id/roles', async (req, res) => {
+  const { id } = req.params;
+  const { role_ids } = req.body;
+  if (isNaN(id)) return res.status(400).json({ error: 'Ungültige Benutzer-ID' });
+  if (!Array.isArray(role_ids)) return res.status(400).json({ error: 'role_ids muss ein Array sein' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM user_roles WHERE user_id = $1', [id]);
+    for (const rid of role_ids) {
+      if (!isNaN(rid)) {
+        await client.query(
+          'INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+          [id, rid]
+        );
+      }
+    }
+    await client.query('COMMIT');
+    res.json({ ok: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 // DELETE /api/users/:id (deactivate)
 router.delete('/:id', async (req, res) => {
   try {

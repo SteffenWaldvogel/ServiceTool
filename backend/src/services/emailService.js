@@ -390,11 +390,18 @@ async function checkNewEmails() {
   }
 }
 
+async function fetchAllEmails() {
+  if (imapConnection) {
+    fetchBySearch(imapConnection, ['ALL'], false);
+  }
+}
+
 module.exports = {
   addMessageToTicket,
   sendTicketReply,
   sendConfirmationEmail,
   startEmailPolling,
   stopEmailPolling,
-  checkNewEmails
+  checkNewEmails,
+  fetchAllEmails
 };

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { api } from '../utils/api';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -7,7 +8,14 @@ export default function LoginPage() {
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [maintenance, setMaintenance] = useState(null);
   const { login } = useAuth();
+
+  useEffect(() => {
+    api.getMaintenance()
+      .then(data => { if (data?.is_active) setMaintenance(data); })
+      .catch(() => {});
+  }, []);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -35,6 +43,21 @@ export default function LoginPage() {
           </div>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>Bitte einloggen</div>
         </div>
+        {maintenance && (
+          <div style={{
+            marginBottom: 16, padding: '10px 14px', borderRadius: 6,
+            background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.4)',
+            color: '#ef4444', fontSize: 13
+          }}>
+            <strong>Wartungsmodus aktiv</strong>
+            {maintenance.reason && <div style={{ marginTop: 4, color: '#fca5a5' }}>{maintenance.reason}</div>}
+            {maintenance.estimated_end && (
+              <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-muted)' }}>
+                Voraussichtlich bis: {new Date(maintenance.estimated_end).toLocaleString('de-DE')}
+              </div>
+            )}
+          </div>
+        )}
         {error && <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div>}
         <form onSubmit={submit}>
           <div className="form-group">

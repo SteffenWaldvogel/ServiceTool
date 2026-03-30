@@ -20,12 +20,24 @@ function UserModal({ user, onClose, onSaved }) {
     notify_high_priority: user?.notify_high_priority ?? true,
   });
   const [roles, setRoles] = useState([]);
+  const [selectedRoleIds, setSelectedRoleIds] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     api.getRoles().then(setRoles).catch(() => {});
-  }, []);
+    if (isEdit && user.user_id) {
+      api.getUserRoles(user.user_id)
+        .then(userRoles => setSelectedRoleIds(userRoles.map(r => r.role_id)))
+        .catch(() => {});
+    }
+  }, [isEdit, user?.user_id]);
+
+  const toggleRole = (roleId) => {
+    setSelectedRoleIds(prev =>
+      prev.includes(roleId) ? prev.filter(id => id !== roleId) : [...prev, roleId]
+    );
+  };
 
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
 
@@ -48,6 +60,8 @@ function UserModal({ user, onClose, onSaved }) {
         };
         if (form.password) data.password = form.password;
         await api.updateUser(user.user_id, data);
+        // Zusätzliche Rollen speichern
+        await api.setUserRoles(user.user_id, { role_ids: selectedRoleIds });
       } else {
         await api.createUser({
           username: form.username, password: form.password, display_name: form.display_name,
@@ -93,13 +107,45 @@ function UserModal({ user, onClose, onSaved }) {
             </div>
           </div>
           <div className="form-group">
-            <label className="form-label">Rolle</label>
+            <label className="form-label">Primäre Rolle</label>
             <select className="form-control" value={form.role_id} onChange={set('role_id')}>
               {roles.map(r => (
                 <option key={r.role_id} value={r.role_id}>{r.label || r.name}</option>
               ))}
             </select>
           </div>
+          {isEdit && roles.length > 0 && (
+            <div className="form-group">
+              <label className="form-label">Zugriffsberechtigungen (Zusatz-Rollen)</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+                {roles.filter(r => r.name !== 'admin').map(r => {
+                  const active = selectedRoleIds.includes(r.role_id);
+                  return (
+                    <button
+                      key={r.role_id}
+                      type="button"
+                      onClick={() => toggleRole(r.role_id)}
+                      style={{
+                        padding: '4px 12px', borderRadius: 20, fontSize: 12, cursor: 'pointer',
+                        border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+                        background: active ? 'rgba(59,130,246,0.15)' : 'var(--bg-elevated)',
+                        color: active ? 'var(--accent)' : 'var(--text-muted)',
+                        fontWeight: active ? 600 : 400,
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {r.label || r.name}
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedRoleIds.length > 0 && (
+                <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+                  {selectedRoleIds.length} Rolle(n) ausgewählt — Berechtigungen werden kombiniert.
+                </div>
+              )}
+            </div>
+          )}
           {isEdit && (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>

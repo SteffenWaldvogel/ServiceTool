@@ -1,4 +1,4 @@
-name: CI/CD Service Ticketing
+name: CI/CD — Service Tool
 
 on:
   push:
@@ -6,53 +6,61 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  NODE_VERSION: '22'
+
 jobs:
-  build-and-test:
+  frontend-build:
+    name: Frontend Build Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: |
-            backend/package-lock.json
-            frontend/package-lock.json
-
-      - name: Install Backend Dependencies
-        run: cd backend && npm ci
-
-      - name: Install Frontend Dependencies
-        run: cd frontend && npm ci
-
-      - name: Build Frontend
-        run: cd frontend && npm run build
-
-      - name: Upload Frontend Build
-        uses: actions/upload-artifact@v4
+          cache-dependency-path: frontend/package-lock.json
+      - run: cd frontend && npm ci
+      - run: cd frontend && npm run build
+      - uses: actions/upload-artifact@v4
         with:
           name: frontend-dist
           path: frontend/dist/
-          retention-days: 7
+          retention-days: 1
 
-      - name: Smoke-Test Backend
-        env:
-          SESSION_SECRET: ci-dummy-secret-64chars-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_NAME: servicetickets
-          DB_USER: postgres
-          DB_PASSWORD: postgres
-          NODE_ENV: test
-          CORS_ORIGIN: http://localhost:5173
-          PORT: 3001
+  backend-check:
+    name: Backend Syntax + Startup Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      - run: cd backend && npm ci
+      - name: Check syntax
+        run: cd backend && find src -name "*.js" | xargs -I {} node --check {}
+      - name: Smoke test
         run: |
           cd backend
-          cp .env.example .env
-          echo "SESSION_SECRET=ci-dummy-secret-64chars-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" >> .env
-          echo "DB_PASSWORD=postgres" >> .env
-          echo "NODE_ENV=test" >> .env
-          echo "CORS_ORIGIN=http://localhost:5173" >> .env
-          timeout 8 node src/server.js || true
+          cat > .env << 'EOF'
+          DB_HOST=localhost
+          DB_PORT=5432
+          DB_NAME=servicetickets_ci
+          DB_USER=postgres
+          DB_PASSWORD=postgres
+          PORT=3001
+          NODE_ENV=test
+          SESSION_SECRET=ci-test-secret-minimum-32-chars-long
+          EOF
+          node src/server.js &
+          SERVER_PID=$!
+          sleep 5
+          if kill -0 $SERVER_PID 2>/dev/null; then
+            echo "✅ Backend starts successfully"
+            kill $SERVER_PID
+          else
+            echo "❌ Backend crashed on startup"
+            exit 1
+          fi

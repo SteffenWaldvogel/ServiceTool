@@ -500,6 +500,7 @@ export default function PosteingangPage() {
   const [emails, setEmails] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedEmail, setSelectedEmail] = useState(null);
+  const [fetching, setFetching] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -507,6 +508,19 @@ export default function PosteingangPage() {
       .then(setEmails)
       .catch(() => setEmails([]))
       .finally(() => setLoading(false));
+  };
+
+  const fetchNow = async () => {
+    setFetching(true);
+    try {
+      await api.fetchEmails();
+      await new Promise(r => setTimeout(r, 1500));
+      load();
+    } catch (e) {
+      load();
+    } finally {
+      setFetching(false);
+    }
   };
 
   useEffect(() => { load(); }, []);
@@ -526,7 +540,12 @@ export default function PosteingangPage() {
           </div>
         </div>
         {!selectedEmail && (
-          <button className="btn btn-ghost btn-sm" onClick={load}>↻ Aktualisieren</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-ghost btn-sm" onClick={load}>↻ Aktualisieren</button>
+            <button className="btn btn-secondary btn-sm" onClick={fetchNow} disabled={fetching}>
+              {fetching ? '⏳ Abrufen…' : '📥 Emails jetzt abrufen'}
+            </button>
+          </div>
         )}
       </div>
 

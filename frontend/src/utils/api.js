@@ -209,6 +209,12 @@ export const api = {
     const q = new URLSearchParams(params).toString();
     return request(`/system/audit-log${q ? '?' + q : ''}`);
   },
+  fetchEmails: () => request('/system/fetch-emails', { method: 'POST' }),
+  getActiveSessions: () => request('/system/active-sessions'),
+  logoutSession: (sid) => request(`/system/sessions/${sid}`, { method: 'DELETE' }),
+  logoutAllSessions: () => request('/system/sessions', { method: 'DELETE' }),
+  getMaintenance: () => request('/system/maintenance'),
+  setMaintenance: (data) => request('/system/maintenance', { method: 'POST', body: JSON.stringify(data) }),
 
   // ── Custom Fields Admin ───────────────────────────────────────────────────
   getCustomFieldDefinitions: (tableName) => request(`/custom-fields/definitions${tableName ? '?table_name=' + tableName : ''}`),
@@ -221,13 +227,16 @@ export const api = {
   deleteCustomFieldOption: (table, key, value) => request(`/custom-fields/options/${table}/${key}/${value}`, { method: 'DELETE' }),
 
   // ── RBAC ─────────────────────────────────────────────────────────────────
-  getRoles: () => request('/stammdaten/roles'),
+  getRoles: () => request('/roles'),
   createRole: (data) => request('/stammdaten/roles', { method: 'POST', body: JSON.stringify(data) }),
   updateRole: (id, data) => request(`/stammdaten/roles/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteRole: (id) => request(`/stammdaten/roles/${id}`, { method: 'DELETE' }),
-  getPermissions: () => request('/stammdaten/permissions'),
+  getPermissions: () => request('/roles/permissions'),
   updateRolePermissions: (id, permissionIds) =>
     request(`/stammdaten/roles/${id}/permissions`, { method: 'PUT', body: JSON.stringify({ permission_ids: permissionIds }) }),
+  getUserRoles: (id) => request(`/users/${id}/roles`),
+  setUserRoles: (id, data) => request(`/users/${id}/roles`, { method: 'PUT', body: JSON.stringify(data) }),
+  getMyPermissions: () => request('/auth/my-permissions'),
 
   // ── Notifications ──────────────────────────────────────────────────────────
   getNotifications: (params = {}) => {
